@@ -21,16 +21,21 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Lazy getter — avoids throwing at module-import time during Next.js build.
-function getPrisma(): PrismaClient {
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient();
-  }
-  return globalForPrisma.prisma;
-}
-
-export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
-  get(_target, prop, receiver) {
-    return Reflect.get(getPrisma(), prop, receiver);
-  },
-});
+// When DATABASE_URL is present (runtime), initialise immediately with the
+// standard singleton pattern.  During the Next.js build phase DATABASE_URL is
+// not set, so we defer creation until the first actual query via a Proxy to
+// avoid throwing at module-import time.
+export const prisma: PrismaClient = process.env.DATABASE_URL
+  ? (globalForPrisma.prisma ??
+    (() => {
+      globalForPrisma.prisma = createPrismaClient();
+      return globalForPrisma.prisma;
+    })())
+  : new Proxy({} as PrismaClient, {
+      get(_target, prop, receiver) {
+        if (!globalForPrisma.prisma) {
+          globalForPrisma.prisma = createPrismaClient();
+        }
+        return Reflect.get(globalForPrisma.prisma, prop, receiver);
+      },
+    });
