@@ -12,13 +12,12 @@ import { formatPrice } from "@/lib/utils/pricing";
 import { estimatePrice } from "@/lib/utils/pricing";
 import { JOB_TYPE_META } from "@/types/job";
 import type { JobType } from "@/lib/generated/prisma/client";
+import type { LatLng } from "@/types/job";
 
 const JOB_TYPE_OPTIONS = Object.entries(JOB_TYPE_META).map(([value, meta]) => ({
   value,
   label: `${meta.icon} ${meta.label}`,
 }));
-
-interface LatLng { lat: number; lng: number; }
 
 export default function CustomerHomePage() {
   const router = useRouter();
@@ -96,6 +95,7 @@ export default function CustomerHomePage() {
           placeholder="House no., street, area, city"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
+          maxLength={500}
         />
 
         {/* Map picker */}

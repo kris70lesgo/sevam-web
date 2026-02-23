@@ -27,6 +27,9 @@ export type ActionErrorCode =
   | "OTP_EXPIRED"
   | "OTP_LOCKED"
   | "OTP_INVALID"
+  | "UNAUTHORIZED"
+  | "FORBIDDEN"
+  | "NOT_FOUND"
   | "SERVER_ERROR";
 
 // ─── OTP ──────────────────────────────────────────────────────────────────────

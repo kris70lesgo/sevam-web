@@ -62,28 +62,34 @@ export default function VerifyPage() {
 
   async function submitOtp(value: string = otp) {
     if (!pendingPhone || value.length !== 6) return;
+    if (loading) return;
     clearError();
     setOtpError(null);
     setHasError(false);
     setLoading(true);
 
-    const result = await verifyOtp(pendingPhone, value);
-    setLoading(false);
+    try {
+      const result = await verifyOtp(pendingPhone, value);
 
-    if (!result.ok) {
-      setHasError(true);
-      setOtp(""); // clear boxes so user can retype
-      if (result.code === "OTP_LOCKED" || result.code === "OTP_EXPIRED") {
-        setError(result.error);
-      } else {
-        setOtpError(result.error);
+      if (!result.ok) {
+        setHasError(true);
+        setOtp(""); // clear boxes so user can retype
+        if (result.code === "OTP_LOCKED" || result.code === "OTP_EXPIRED") {
+          setError(result.error);
+        } else {
+          setOtpError(result.error);
+        }
+        return;
       }
-      return;
-    }
 
-    if (result.data) {
-      setUser(result.data);
-      router.push(HOME_FOR[result.data.userType]);
+      if (result.data) {
+        setUser(result.data);
+        router.push(HOME_FOR[result.data.userType]);
+      }
+    } catch {
+      setOtpError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -93,17 +99,20 @@ export default function VerifyPage() {
     clearError();
     setOtpError(null);
 
-    const result = await sendOtp(pendingPhone);
-    setResendLoading(false);
+    try {
+      const result = await sendOtp(pendingPhone);
 
-    if (!result.ok) {
-      setError(result.error);
-      return;
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      setOtp("");
+      setHasError(false);
+      setCountdown(RESEND_COOLDOWN);
+    } finally {
+      setResendLoading(false);
     }
-
-    setOtp("");
-    setHasError(false);
-    setCountdown(RESEND_COOLDOWN);
   }
 
   if (!pendingPhone) return null; // will redirect

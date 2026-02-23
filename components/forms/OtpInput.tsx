@@ -16,6 +16,11 @@ export interface OtpInputProps {
   disabled?: boolean;
   /** When true, applies a CSS shake animation for one render cycle. */
   hasError?: boolean;
+  /**
+   * Increment this number to re-trigger the shake animation even when
+   * `hasError` remains true (e.g., multiple wrong attempts in a row).
+   */
+  shakeTrigger?: number;
   className?: string;
 }
 
@@ -28,19 +33,20 @@ export function OtpInput({
   length = 6,
   disabled = false,
   hasError = false,
+  shakeTrigger,
   className,
 }: OtpInputProps) {
   const inputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
   const [shaking, setShaking] = React.useState(false);
 
-  // Trigger shake when hasError flips to true
+  // Trigger shake when hasError flips to true OR shakeTrigger changes
   React.useEffect(() => {
     if (hasError) {
       setShaking(true);
       const id = setTimeout(() => setShaking(false), 600);
       return () => clearTimeout(id);
     }
-  }, [hasError]);
+  }, [hasError, shakeTrigger]);
 
   // Split controlled value into array of single chars
   const chars = Array.from({ length }, (_, i) => value[i] ?? "");

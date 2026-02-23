@@ -8,8 +8,8 @@ import type { JobStatus } from "@/lib/generated/prisma/client";
 
 // ─── State machine ────────────────────────────────────────────────────────────
 //  PENDING → ACCEPTED → IN_PROGRESS → COMPLETED
-//  Any state → CANCELLED (by customer, or system)
-//  Any state → DISPUTED
+//  PENDING / ACCEPTED → CANCELLED (by customer or admin)
+//  IN_PROGRESS / COMPLETED → DISPUTED
 
 const VALID_TRANSITIONS: Partial<Record<JobStatus, JobStatus[]>> = {
   PENDING:     ["ACCEPTED", "CANCELLED"],
@@ -29,13 +29,18 @@ async function notifyCustomer(
   title: string,
   body: string
 ) {
-  const customer = await prisma.user.findUnique({
-    where: { id: customerId },
-    select: { fcmToken: true },
-  });
-  await prisma.notification.create({ data: { userId: customerId, jobId, title, body } });
-  if (customer?.fcmToken) {
-    await sendPushNotification(customer.fcmToken, { title, body, data: { jobId } });
+  // Non-critical: notification failures must never break the calling job flow.
+  try {
+    const customer = await prisma.user.findUnique({
+      where: { id: customerId },
+      select: { fcmToken: true },
+    });
+    await prisma.notification.create({ data: { userId: customerId, jobId, title, body } });
+    if (customer?.fcmToken) {
+      await sendPushNotification(customer.fcmToken, { title, body, data: { jobId } });
+    }
+  } catch {
+    console.error("[notifyCustomer] Non-critical notification failure for job", jobId);
   }
 }
 
@@ -52,16 +57,23 @@ export async function acceptJob(jobId: string): Promise<ActionResult> {
   if (!workerProfile) return { ok: false, error: "Worker profile not found.", code: "SERVER_ERROR" };
   if (!workerProfile.isApproved) return { ok: false, error: "Your profile is pending approval.", code: "SERVER_ERROR" };
 
-  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  const job = await prisma.job.findUnique({ where: { id: jobId }, select: { customerId: true, status: true } });
   if (!job) return { ok: false, error: "Job not found.", code: "SERVER_ERROR" };
-  if (!canTransition(job.status, "ACCEPTED")) {
+  if (job.status !== "PENDING") {
     return { ok: false, error: `Job cannot be accepted (current status: ${job.status}).`, code: "SERVER_ERROR" };
   }
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "ACCEPTED", workerId: workerProfile.id, acceptedAt: new Date() },
+  // Atomic accept: only succeeds if the job is still PENDING with no worker assigned.
+  // Prevents the race condition where two workers both pass the findUnique check
+  // and the last update silently overwrites the first worker assignment.
+  const updated = await prisma.job.updateMany({
+    where: { id: jobId, status: "PENDING", workerId: null },
+    data:  { status: "ACCEPTED", workerId: workerProfile.id, acceptedAt: new Date() },
   });
+
+  if (updated.count === 0) {
+    return { ok: false, error: "Job is no longer available.", code: "SERVER_ERROR" };
+  }
 
   await notifyCustomer(job.customerId, jobId, "Worker assigned!", "Your worker is on the way.");
   return { ok: true };

@@ -10,7 +10,8 @@ export interface InputProps
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, label, error, hint, id, ...props }, ref) => {
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
+    const reactId = React.useId();
+    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-") ?? reactId;
 
     return (
       <div className="flex flex-col gap-1.5">

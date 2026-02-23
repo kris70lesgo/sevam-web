@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 
 export default function GlobalError({
@@ -10,9 +11,16 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+
   useEffect(() => {
-    // Log to an error reporting service in production
-    console.error("[GlobalError]", error);
+    // Only send the stable digest to internal telemetry — never the full error
+    // object which may contain PII or internal implementation details.
+    if (process.env.NODE_ENV !== "production") {
+      // In dev it is useful to see the error name (not message) for quick triage.
+      console.error("[GlobalError]", error.name, error.digest ?? "");
+    }
+    // TODO: send error.digest to your telemetry/APM service here.
   }, [error]);
 
   return (
@@ -21,15 +29,15 @@ export default function GlobalError({
         <p className="text-5xl mb-2">⚠️</p>
         <h2 className="text-2xl font-semibold text-foreground">Something went wrong</h2>
         <p className="mt-2 text-muted text-sm">
-          {error.message ?? "An unexpected error occurred. Please try again."}
+          An unexpected error occurred. Please try again.
         </p>
         {error.digest && (
-          <p className="mt-1 text-xs text-muted font-mono">ID: {error.digest}</p>
+          <p className="mt-1 text-xs text-muted font-mono">Reference: {error.digest}</p>
         )}
       </div>
       <div className="flex gap-3">
         <Button onClick={reset}>Try Again</Button>
-        <Button variant="outline" onClick={() => (window.location.href = "/")}>
+        <Button variant="outline" onClick={() => router.push("/")}>
           Go Home
         </Button>
       </div>

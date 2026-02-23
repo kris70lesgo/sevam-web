@@ -10,7 +10,13 @@ const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL = "30d";
 
 function getSecret(envVar: string, fallback: string): Uint8Array {
-  const val = process.env[envVar] ?? fallback;
+  const val = process.env[envVar];
+  if (!val) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(`Missing required environment variable: ${envVar}`);
+    }
+    return new TextEncoder().encode(fallback);
+  }
   return new TextEncoder().encode(val);
 }
 
@@ -39,12 +45,23 @@ export async function mintRefreshToken(payload: Pick<SessionPayload, "userId">):
 
 // ─── Validate tokens ──────────────────────────────────────────────────────────
 
+function validateSessionPayload(payload: unknown): payload is SessionPayload {
+  if (!payload || typeof payload !== "object") return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    typeof p.userId === "string" &&
+    typeof p.phone === "string" &&
+    (p.userType === "CUSTOMER" || p.userType === "WORKER" || p.userType === "ADMIN")
+  );
+}
+
 export async function verifyAccessToken(
   token: string
 ): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, ACCESS_SECRET());
-    return payload as unknown as SessionPayload;
+    if (!validateSessionPayload(payload)) return null;
+    return payload;
   } catch {
     return null;
   }
@@ -120,9 +137,12 @@ export async function refreshSession(): Promise<SessionPayload | null> {
   const { prisma } = await import("@/lib/db/prisma");
   const user = await prisma.user.findUnique({
     where: { id: refreshPayload.userId },
+    // TODO: add bannedAt DateTime? to User model and check here once migrated.
+    // select: { id: true, phone: true, userType: true, bannedAt: true },
     select: { id: true, phone: true, userType: true },
   });
   if (!user) return null;
+  // TODO: when bannedAt column is added: if (user.bannedAt) return null;
 
   const newPayload: SessionPayload = {
     userId: user.id,

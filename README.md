@@ -10,16 +10,16 @@ A home services marketplace connecting customers with verified local workers. Cu
 | Language | TypeScript |
 | Styling | Tailwind CSS v4, shadcn/ui |
 | Database | Supabase (Postgres) + Prisma ORM |
-| Auth | Supabase Auth |
+| Auth | Custom Phone OTP + JWT (jose) |
 | Real-time | Supabase Realtime |
 | Maps | Google Maps API |
 | Payments | Razorpay |
-| Forms | React Hook Form + Zod |
+| Notifications | Twilio SMS + Firebase FCM |
 | State | Zustand |
 
 ## Project Structure
 
-```
+```text
 sevam-web/
 ├── app/
 │   ├── (customer)/        # Customer-facing routes
@@ -90,12 +90,26 @@ SUPABASE_SERVICE_ROLE_KEY=
 # Database
 DATABASE_URL=
 
+# JWT / Auth
+JWT_ACCESS_SECRET=
+JWT_REFRESH_SECRET=
+OTP_SECRET=
+
+# Twilio SMS
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
+
+# Firebase Cloud Messaging
+FCM_SERVICE_ACCOUNT_JSON=
+
 # Google Maps
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 
 # Razorpay
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
 ```
 
 ## Scripts

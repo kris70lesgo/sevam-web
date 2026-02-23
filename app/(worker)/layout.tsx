@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/hooks/useAuthStore";
 import { PageSpinner } from "@/components/ui";
@@ -21,11 +20,11 @@ export default function WorkerLayout({ children }: { children: React.ReactNode }
   const isLoading = useAuthStore((s) => s.isLoading);
   const pathname  = usePathname();
 
-  useEffect(() => {
-    if (!isLoading && (!user || user.userType !== "WORKER")) {
-      router.replace("/login");
-    }
-  }, [user, isLoading, router]);
+  // Redirect non-workers — run in render path for immediate response
+  if (!isLoading && (!user || user.userType !== "WORKER")) {
+    router.replace("/login");
+    return <PageSpinner />;
+  }
 
   if (isLoading || !user) return <PageSpinner />;
 

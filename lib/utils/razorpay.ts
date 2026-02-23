@@ -38,5 +38,9 @@ export function verifyRazorpaySignature(
     .createHmac("sha256", secret)
     .update(body)
     .digest("hex");
-  return expected === signature;
+  // Timing-safe compare: avoids early-exit leaking the expected length
+  const expectedBuf = Buffer.from(expected, "hex");
+  const signatureBuf = Buffer.from(signature, "hex");
+  if (expectedBuf.length !== signatureBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, signatureBuf);
 }

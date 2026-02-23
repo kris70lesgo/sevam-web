@@ -20,9 +20,9 @@ const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER ?? "";
  */
 export async function sendSms(to: string, body: string): Promise<SmsResult> {
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-    // In development, log the OTP instead of crashing.
     if (process.env.NODE_ENV !== "production") {
-      console.info(`[SMS DEV] To: ${to} | Message: ${body}`);
+      // Do NOT log the phone number (PII) or body (contains OTP secret).
+      console.info("[SMS DEV] Twilio not configured — SMS skipped.");
       return { ok: true, sid: "dev-sid" };
     }
     return { ok: false, error: "SMS provider not configured." };
@@ -52,8 +52,9 @@ export async function sendSms(to: string, body: string): Promise<SmsResult> {
 
     return { ok: true, sid: json.sid };
   } catch (err) {
+    // Log only a safe reference, not the full error which may contain credentials.
     const message = err instanceof Error ? err.message : "Unknown SMS error";
-    console.error("[SMS] Delivery failed:", message);
+    console.error("[SMS] Delivery failed (check Twilio config).");
     return { ok: false, error: message };
   }
 }

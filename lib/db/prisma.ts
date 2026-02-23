@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/prisma/client";
+import { PrismaClient } from "@/lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 function createPrismaClient() {
@@ -9,10 +9,8 @@ function createPrismaClient() {
   const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
+    // Never log "query" — raw SQL can contain PII (phone numbers, addresses, etc.)
+    log: ["error", "warn"],
   });
 }
 

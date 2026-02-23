@@ -30,9 +30,16 @@ export async function getAnalytics(): Promise<ActionResult<AnalyticsSummary>> {
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  // Count jobs by status using findMany instead of groupBy (more portable)
-  const allJobsRaw = await prisma.job.findMany({
-    select: { status: true, type: true, createdAt: true },
+  // Use groupBy to count jobs by status and type efficiently
+  const [jobsByStatusRaw, jobsByTypeRaw, totalJobsCount] = await Promise.all([
+    prisma.job.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.job.groupBy({ by: ["type"], _count: { _all: true } }),
+    prisma.job.count(),
+  ]);
+
+  // Also fetch creation dates for the all-jobs daily series
+  const allJobDates = await prisma.job.findMany({
+    select: { createdAt: true },
   });
 
   const [
@@ -50,15 +57,12 @@ export async function getAnalytics(): Promise<ActionResult<AnalyticsSummary>> {
     }),
   ]);
 
-  // Flat counts by status + type
+  // Build flat maps from groupBy results
   const jobsByStatus: Record<string, number> = {};
-  const jobsByType:   Record<string, number> = {};
-  let totalJobs = 0;
-  for (const row of allJobsRaw) {
-    jobsByStatus[row.status] = (jobsByStatus[row.status] ?? 0) + 1;
-    jobsByType[row.type]     = (jobsByType[row.type]     ?? 0) + 1;
-    totalJobs += 1;
-  }
+  for (const row of jobsByStatusRaw) jobsByStatus[row.status] = row._count._all;
+  const jobsByType: Record<string, number> = {};
+  for (const row of jobsByTypeRaw) jobsByType[row.type] = row._count._all;
+  const totalJobs = totalJobsCount;
 
   const totalRevenue = completedJobsLast30.reduce(
     (sum, j) => sum + (j.finalPrice ?? j.estimatedPrice), 0
@@ -84,7 +88,7 @@ export async function getAnalytics(): Promise<ActionResult<AnalyticsSummary>> {
 
   // All jobs created per day (last 30 days)
   const allDayMap = new Map<string, number>();
-  for (const job of allJobsRaw) {
+  for (const job of allJobDates) {
     const key = job.createdAt.toISOString().slice(0, 10);
     if (key >= thirtyDaysAgo.toISOString().slice(0, 10)) {
       allDayMap.set(key, (allDayMap.get(key) ?? 0) + 1);
@@ -124,10 +128,14 @@ export async function setWorkerApproval(
     return { ok: false, error: "Admin access required.", code: "SERVER_ERROR" };
   }
 
-  await prisma.workerProfile.update({
+  const updated = await prisma.workerProfile.updateMany({
     where: { id: workerId },
     data:  { isApproved: approved },
   });
+
+  if (updated.count === 0) {
+    return { ok: false, error: "Worker profile not found.", code: "SERVER_ERROR" };
+  }
 
   return { ok: true };
 }

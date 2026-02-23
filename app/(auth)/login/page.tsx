@@ -29,21 +29,26 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    const formattedPhone = `+91${phone}`;
-    const result = await sendOtp(formattedPhone);
-    setLoading(false);
+    try {
+      const formattedPhone = `+91${phone}`;
+      const result = await sendOtp(formattedPhone);
 
-    if (!result.ok) {
-      if (result.code === "RATE_LIMITED") {
-        setError(result.error);
-      } else {
-        setFieldError(result.error);
+      if (!result.ok) {
+        if (result.code === "RATE_LIMITED") {
+          setError(result.error);
+        } else {
+          setFieldError(result.error);
+        }
+        return;
       }
-      return;
-    }
 
-    setPendingPhone(formattedPhone);
-    router.push("/verify");
+      setPendingPhone(formattedPhone);
+      router.push("/verify");
+    } catch {
+      setFieldError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

@@ -68,8 +68,7 @@ export async function proxy(req: NextRequest) {
   const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
 
   let session: SessionPayload | null = null;
-  let response = NextResponse.next();
-  let refreshed = false;
+  let refreshedSetCookie: string | null = null;
 
   // ── 1. Try access token ─────────────────────────────────────────────
   if (accessToken) {
@@ -99,11 +98,8 @@ export async function proxy(req: NextRequest) {
         const newSession = (await userRes.json()) as SessionPayload | null;
         if (newSession) {
           session = newSession;
-          // Forward the new cookies set by the refresh endpoint
-          response = NextResponse.next();
-          const setCookie = userRes.headers.get("set-cookie");
-          if (setCookie) response.headers.set("set-cookie", setCookie);
-          refreshed = true;
+          // Preserve the new cookies so we can carry them on the final response.
+          refreshedSetCookie = userRes.headers.get("set-cookie");
         }
       }
     }
@@ -130,22 +126,24 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(homeUrl);
   }
 
-  // ── 5. Allow request, forward session headers ─────────────────────
-  if (!refreshed) response = NextResponse.next();
-
-  // SECURITY: Strip any client-supplied identity headers before setting ours.
-  // Without this a malicious client could forge x-user-id / x-user-type and
-  // have them forwarded to Server Components that trust those headers.
+  // ── 5. Build final response ───────────────────────────────────────
+  // Set identity headers on the INNER REQUEST so Server Components can read
+  // them via headers().get(). Do NOT set them on the outer response — that
+  // would expose user identifiers to the browser.
   const requestHeaders = new Headers(req.headers);
-  requestHeaders.delete("x-user-id");
+  requestHeaders.delete("x-user-id");    // strip any client-supplied forgery
   requestHeaders.delete("x-user-type");
-  response = NextResponse.next({ request: { headers: requestHeaders } });
+  requestHeaders.set("x-user-id",   session.userId);
+  requestHeaders.set("x-user-type", session.userType);
 
-  // Pass verified session metadata as request headers for Server Components.
-  response.headers.set("x-user-id", session.userId);
-  response.headers.set("x-user-type", session.userType);
+  const finalResponse = NextResponse.next({ request: { headers: requestHeaders } });
 
-  return response;
+  // Carry over refreshed session cookies so the browser receives them.
+  if (refreshedSetCookie) {
+    finalResponse.headers.set("set-cookie", refreshedSetCookie);
+  }
+
+  return finalResponse;
 }
 
 export const config = {

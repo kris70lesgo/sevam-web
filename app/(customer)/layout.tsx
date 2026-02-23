@@ -11,8 +11,12 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   const isLoading = useAuthStore((s) => s.isLoading);
 
   useEffect(() => {
-    if (!isLoading && (!user || user.userType !== "CUSTOMER")) {
+    if (!isLoading && !user) {
       router.replace("/login");
+    } else if (!isLoading && user?.userType === "WORKER") {
+      router.replace("/dashboard");
+    } else if (!isLoading && user?.userType === "ADMIN") {
+      router.replace("/analytics");
     }
   }, [user, isLoading, router]);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { getWorkerJobs } from "@/server/actions/workers/worker-dashboard";
 import { acceptJob } from "@/server/actions/jobs/job-status";
 import { createClient } from "@/lib/db/supabase";
@@ -15,15 +16,21 @@ export default function WorkerJobsPage() {
   const [active,    setActive]    = useState<JobSummary[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [accepting, setAccepting] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const result = await getWorkerJobs();
-    if (result.ok) {
-      setAvailable(result.data.available);
-      setActive(result.data.active);
+    try {
+      const result = await getWorkerJobs();
+      if (result.ok) {
+        setAvailable(result.data.available);
+        setActive(result.data.active);
+      }
+    } catch {
+      // keep current state on error
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -41,9 +48,12 @@ export default function WorkerJobsPage() {
 
   async function handleAccept(jobId: string) {
     setAccepting(jobId);
+    setAcceptError(null);
     const result = await acceptJob(jobId);
     if (result.ok) {
       await load();
+    } else {
+      setAcceptError(result.error);
     }
     setAccepting(null);
   }
@@ -52,6 +62,11 @@ export default function WorkerJobsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {acceptError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {acceptError}
+        </p>
+      )}
       {/* Active jobs */}
       {active.length > 0 && (
         <section>
@@ -131,9 +146,9 @@ function JobCard({ job, showLink }: { job: JobSummary; showLink?: boolean }) {
           <Badge variant={statusColor}>{JOB_STATUS_LABEL[job.status]}</Badge>
         </div>
         {showLink && (
-          <a href={`/active`}>
+          <Link href="/active">
             <Button size="sm" variant="outline" className="w-full">View Active Job</Button>
-          </a>
+          </Link>
         )}
       </CardContent>
     </Card>

@@ -17,7 +17,6 @@
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/realtime-js": "^2.97.0",
     "@supabase/supabase-js": "^2.97.0",
-    "@types/pg": "^8.16.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -35,14 +34,17 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "server-only": "^0.0.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

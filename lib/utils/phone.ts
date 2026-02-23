@@ -31,7 +31,7 @@ export function normalisePhone(raw: string): string {
   }
 
   if (!isValidPhone(phone)) {
-    throw new Error(`Invalid phone number: ${raw}`);
+    throw new Error("Invalid phone number");
   }
 
   return phone;

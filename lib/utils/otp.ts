@@ -1,7 +1,16 @@
 import crypto from "crypto";
 
 const OTP_LENGTH = 6;
-const OTP_SECRET = process.env.OTP_SECRET ?? "fallback-dev-secret-change-in-prod";
+const OTP_SECRET = (() => {
+  const val = process.env.OTP_SECRET;
+  if (!val) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Missing required environment variable: OTP_SECRET");
+    }
+    return "fallback-dev-secret-change-in-prod";
+  }
+  return val;
+})();
 
 /**
  * Generate a cryptographically random 6-digit OTP string.

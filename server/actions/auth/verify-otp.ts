@@ -56,7 +56,9 @@ export async function verifyOtp(
 
     // Check expiration
     if (record.expiresAt < new Date()) {
-      await prisma.otpVerification.delete({ where: { phone } }).catch(() => {});
+      await prisma.otpVerification.delete({ where: { phone } }).catch((err: unknown) => {
+        console.error("[verifyOtp] Failed to delete expired OTP record:", err instanceof Error ? err.message : "unknown");
+      });
       return {
         ok: false,
         error: "OTP has expired. Please request a new one.",
@@ -66,7 +68,9 @@ export async function verifyOtp(
 
     // Check lock
     if (record.attempts >= OTP_MAX_ATTEMPTS) {
-      await prisma.otpVerification.delete({ where: { phone } }).catch(() => {});
+      await prisma.otpVerification.delete({ where: { phone } }).catch((err: unknown) => {
+        console.error("[verifyOtp] Failed to delete locked OTP record:", err instanceof Error ? err.message : "unknown");
+      });
       return {
         ok: false,
         error:
@@ -88,7 +92,9 @@ export async function verifyOtp(
       });
 
       if (remaining <= 0) {
-        await prisma.otpVerification.delete({ where: { phone } }).catch(() => {});
+        await prisma.otpVerification.delete({ where: { phone } }).catch((err: unknown) => {
+          console.error("[verifyOtp] Failed to delete OTP after max attempts:", err instanceof Error ? err.message : "unknown");
+        });
         return {
           ok: false,
           error:
@@ -115,7 +121,7 @@ export async function verifyOtp(
       prisma.otpVerification.delete({ where: { phone } }),
     ]);
 
-    // ── 5. Mint session + set cookies ──────────────────────────────
+    // ── 5. Mint session + set cookies + audit log ──────────────────────
     const sessionPayload: SessionPayload = {
       userId: user.id,
       phone: user.phone,
@@ -123,6 +129,15 @@ export async function verifyOtp(
     };
 
     await setSessionCookies(sessionPayload);
+
+    console.info(
+      JSON.stringify({
+        audit: "login",
+        userId: user.id,
+        userType: user.userType,
+        timestamp: new Date().toISOString(),
+      })
+    );
 
     return { ok: true, data: sessionPayload };
   } catch (err) {

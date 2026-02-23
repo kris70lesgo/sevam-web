@@ -63,6 +63,10 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
     // Keep caret at end when value changes
     function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
       const input = e.currentTarget;
+      // Allow: Ctrl/Cmd shortcuts (copy, paste, select all, etc.)
+      if (e.ctrlKey || e.metaKey) return;
+      // Allow: Shift+Insert paste
+      if (e.shiftKey && e.key === "Insert") return;
       // Allow: backspace, delete, tab, escape, enter, arrows
       const allowed = [
         "Backspace", "Delete", "Tab", "Escape", "Enter",

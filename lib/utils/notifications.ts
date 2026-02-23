@@ -14,51 +14,76 @@ const FCM_SERVICE_ACCOUNT_JSON = process.env.FCM_SERVICE_ACCOUNT_JSON ?? "";
 
 /**
  * Get a short-lived OAuth2 access token using the service account.
- * In production, cache this token (it's valid for 1 hour).
+ * Caches the token in-memory (valid for 1 hour); prevents duplicate refreshes.
  */
+// In-memory cache
+let _cachedToken: string | null = null;
+let _tokenExpiry = 0;
+let _tokenPromise: Promise<string> | null = null;
+
 async function getAccessToken(): Promise<string> {
-  if (!FCM_SERVICE_ACCOUNT_JSON) {
-    throw new Error("Missing env: FCM_SERVICE_ACCOUNT_JSON");
+  // Return cached token if still valid (with 2-min safety margin)
+  if (_cachedToken && Date.now() < _tokenExpiry - 120_000) {
+    return _cachedToken;
   }
+  // De-duplicate concurrent refresh requests
+  if (_tokenPromise) return _tokenPromise;
 
-  const sa = JSON.parse(FCM_SERVICE_ACCOUNT_JSON) as {
-    client_email: string;
-    private_key: string;
-  };
+  _tokenPromise = (async () => {
+    if (!FCM_SERVICE_ACCOUNT_JSON) {
+      throw new Error("Missing env: FCM_SERVICE_ACCOUNT_JSON");
+    }
 
-  // Build a signed JWT for the Google OAuth2 token endpoint
-  const now = Math.floor(Date.now() / 1000);
-  const exp = now + 3600;
+    let sa: { client_email: string; private_key: string };
+    try {
+      sa = JSON.parse(FCM_SERVICE_ACCOUNT_JSON) as { client_email: string; private_key: string };
+    } catch (err) {
+      throw new Error(`Failed to parse FCM_SERVICE_ACCOUNT_JSON: ${err instanceof Error ? err.message : err}`);
+    }
 
-  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
-  const payload = Buffer.from(
-    JSON.stringify({
-      iss: sa.client_email,
-      sub: sa.client_email,
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp,
-      scope: "https://www.googleapis.com/auth/firebase.messaging",
-    })
-  ).toString("base64url");
+    // Build a signed JWT for the Google OAuth2 token endpoint
+    const now = Math.floor(Date.now() / 1000);
+    const exp = now + 3600;
 
-  const { createSign } = await import("crypto");
-  const sign = createSign("RSA-SHA256");
-  sign.update(`${header}.${payload}`);
-  const sig = sign.sign(sa.private_key, "base64url");
-  const jwt = `${header}.${payload}.${sig}`;
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        iss: sa.client_email,
+        sub: sa.client_email,
+        aud: "https://oauth2.googleapis.com/token",
+        iat: now,
+        exp,
+        scope: "https://www.googleapis.com/auth/firebase.messaging",
+      })
+    ).toString("base64url");
 
-  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt,
-    }),
-  });
+    const { createSign } = await import("crypto");
+    const sign = createSign("RSA-SHA256");
+    sign.update(`${header}.${payload}`);
+    const sig = sign.sign(sa.private_key, "base64url");
+    const jwt = `${header}.${payload}.${sig}`;
 
-  const tokenJson = await tokenRes.json();
-  return tokenJson.access_token as string;
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const errBody = await tokenRes.text().catch(() => "");
+      throw new Error(`Google OAuth2 token request failed: HTTP ${tokenRes.status} — ${errBody}`);
+    }
+
+    const tokenJson = await tokenRes.json() as { access_token: string; expires_in?: number };
+    _cachedToken = tokenJson.access_token;
+    _tokenExpiry = Date.now() + (tokenJson.expires_in ?? 3600) * 1000;
+    return _cachedToken;
+  })().finally(() => { _tokenPromise = null; });
+
+  return _tokenPromise;
 }
 
 /**
@@ -70,9 +95,9 @@ export async function sendPushNotification(
   { title, body, data }: FcmPayload
 ): Promise<void> {
   if (!FCM_PROJECT_ID || !FCM_SERVICE_ACCOUNT_JSON) {
-    // Dev mode — just log
     if (process.env.NODE_ENV !== "production") {
-      console.info(`[FCM DEV] Token: ${fcmToken.slice(0, 20)}… | ${title}: ${body}`);
+      // Do NOT log FCM tokens (device identifiers / PII) or notification body.
+      console.info("[FCM DEV] FCM not configured — push notification skipped.");
     }
     return;
   }
@@ -99,11 +124,11 @@ export async function sendPushNotification(
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      console.error("[FCM] Send failed:", err);
+      // Log only the HTTP status — not the full error body which may contain token data.
+      console.error(`[FCM] Send failed: HTTP ${res.status}`);
     }
-  } catch (err) {
-    console.error("[FCM] Unexpected error:", err);
+  } catch {
+    console.error("[FCM] Unexpected error sending push notification.");
   }
 }
 

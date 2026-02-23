@@ -21,14 +21,6 @@ export interface PriceEstimate {
   currency: "INR";
 }
 
-// ─── Server action input shapes ───────────────────────────────────────────────
-
-export interface CreateJobInput {
-  type: JobType;
-  description: string;
-  location: JobLocation;
-}
-
 export interface JobSummary {
   id: string;
   type: JobType;

@@ -75,7 +75,10 @@ export async function getCustomers(
     return { ok: false, error: "Admin access required.", code: "SERVER_ERROR" };
   }
 
-  const skip = (page - 1) * limit;
+  // Validate and clamp pagination parameters
+  const safePage  = Math.max(1, Math.floor(page));
+  const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+  const skip = (safePage - 1) * safeLimit;
 
   const [users, total] = await prisma.$transaction([
     prisma.user.findMany({
@@ -83,7 +86,7 @@ export async function getCustomers(
       include: { _count: { select: { customerJobs: true } } },
       orderBy: { createdAt: "desc" },
       skip,
-      take: limit,
+      take: safeLimit,
     }),
     prisma.user.count({ where: { userType: "CUSTOMER" } }),
   ]);
@@ -128,6 +131,17 @@ export async function setUserBanned(
       prisma.user.update({ where: { id: userId }, data: { fcmToken: null } }),
     ]);
   }
+
+  // Audit trail: log who performed this sensitive admin action.
+  console.info(
+    JSON.stringify({
+      audit: "setUserBanned",
+      adminId: session.userId,
+      targetUserId: userId,
+      action: banned ? "banned" : "unbanned",
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   return { ok: true };
 }

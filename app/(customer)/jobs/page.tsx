@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui";
 import { PageSpinner } from "@/components/ui";
 import { Button } from "@/components/ui";
+import { cn } from "@/lib/utils/cn";
 import { JOB_TYPE_META, JOB_STATUS_LABEL, JOB_STATUS_COLOR } from "@/types/job";
 import { formatPrice } from "@/lib/utils/pricing";
 import type { JobSummary } from "@/types/job";
@@ -24,11 +25,18 @@ export default function CustomerJobsPage() {
   const [jobs,       setJobs]   = useState<JobSummary[]>([]);
   const [loading,    setLoading] = useState(true);
   const [activeTab,  setTab]    = useState<JobStatus | "ALL">("ALL");
+  const [error,      setError]  = useState<string | null>(null);
 
   async function load(status?: JobStatus) {
     setLoading(true);
+    setError(null);
     const result = await getCustomerJobs({ status, limit: 30 });
-    if (result.ok) setJobs(result.data.jobs);
+    if (result.ok) {
+      setJobs(result.data.jobs);
+    } else {
+      setJobs([]);
+      setError(result.error);
+    }
     setLoading(false);
   }
 
@@ -51,12 +59,12 @@ export default function CustomerJobsPage() {
           <button
             key={tab.value}
             onClick={() => setTab(tab.value)}
-            className={[
+            className={cn(
               "shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
               activeTab === tab.value
                 ? "bg-primary text-white"
-                : "bg-surface-2 text-muted hover:text-foreground",
-            ].join(" ")}
+                : "bg-surface-2 text-muted hover:text-foreground"
+            )}
           >
             {tab.label}
           </button>
@@ -65,6 +73,12 @@ export default function CustomerJobsPage() {
 
       {loading ? (
         <PageSpinner />
+      ) : error ? (
+        <div className="py-16 text-center text-muted">
+          <p className="text-4xl mb-3">⚠️</p>
+          <p className="font-medium">Failed to load jobs</p>
+          <p className="text-sm mt-1">{error}</p>
+        </div>
       ) : jobs.length === 0 ? (
         <div className="py-16 text-center text-muted">
           <p className="text-4xl mb-3">🔧</p>
@@ -89,7 +103,7 @@ function JobCard({ job }: { job: JobSummary }) {
 
   const isActive    = ["PENDING", "ACCEPTED", "IN_PROGRESS"].includes(job.status);
   const isCompleted = job.status === "COMPLETED";
-  const needsPayment = isCompleted && !job.finalPrice;
+  const needsPayment = isCompleted && job.finalPrice == null;
 
   return (
     <Card>

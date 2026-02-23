@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { verifyRazorpaySignature } from "@/lib/utils/razorpay";
 
-const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET ?? "";
-
 export async function POST(req: NextRequest) {
+  // Fail closed: never process a webhook if the secret is not configured.
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error("[Razorpay Webhook] RAZORPAY_WEBHOOK_SECRET is not set.");
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
   const rawBody = await req.text();
 
   // Verify webhook signature
   const signature = req.headers.get("x-razorpay-signature") ?? "";
-  const isValid = verifyRazorpaySignature(rawBody, "", signature, RAZORPAY_WEBHOOK_SECRET);
+  const isValid = verifyRazorpaySignature(rawBody, "", signature, webhookSecret);
 
   if (!isValid) {
     console.warn("[Razorpay Webhook] Invalid signature");
@@ -33,10 +38,18 @@ export async function POST(req: NextRequest) {
     const razorpayOrderId   = entity?.order_id as string | undefined;
 
     if (razorpayOrderId && razorpayPaymentId) {
-      await prisma.payment.updateMany({
-        where: { razorpayOrderId },
-        data:  { status: "SUCCESS", razorpayPaymentId },
-      });
+      const payment = await prisma.payment.findFirst({ where: { razorpayOrderId } });
+      if (payment) {
+        try {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data:  { status: "SUCCESS", razorpayPaymentId },
+          });
+        } catch (err) {
+          console.error("[Razorpay Webhook] DB update failed for payment.captured:", err);
+          return NextResponse.json({ error: "Database error" }, { status: 500 });
+        }
+      }
     }
   }
 
@@ -46,10 +59,18 @@ export async function POST(req: NextRequest) {
     const razorpayOrderId = entity?.order_id as string | undefined;
 
     if (razorpayOrderId) {
-      await prisma.payment.updateMany({
-        where: { razorpayOrderId },
-        data:  { status: "FAILED" },
-      });
+      const payment = await prisma.payment.findFirst({ where: { razorpayOrderId } });
+      if (payment) {
+        try {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data:  { status: "FAILED" },
+          });
+        } catch (err) {
+          console.error("[Razorpay Webhook] DB update failed for payment.failed:", err);
+          return NextResponse.json({ error: "Database error" }, { status: 500 });
+        }
+      }
     }
   }
 

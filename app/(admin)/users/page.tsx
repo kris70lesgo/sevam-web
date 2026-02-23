@@ -15,6 +15,7 @@ export default function AdminUsersPage() {
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [actingId,  setActingId]  = useState<string | null>(null);
+  const [actingAction, setActingAction] = useState<"approve" | "reject" | null>(null);
 
   const loadWorkers = useCallback(async (filter: "ALL" | "PENDING") => {
     setLoading(true);
@@ -38,11 +39,17 @@ export default function AdminUsersPage() {
 
   async function handleApproval(workerId: string, approve: boolean) {
     setActingId(workerId);
-    await setWorkerApproval(workerId, approve);
-    // Refresh current view
-    if (tab === "WORKERS_PENDING") loadWorkers("PENDING");
-    else loadWorkers("ALL");
-    setActingId(null);
+    setActingAction(approve ? "approve" : "reject");
+    try {
+      const result = await setWorkerApproval(workerId, approve);
+      if (result.ok) {
+        if (tab === "WORKERS_PENDING") await loadWorkers("PENDING");
+        else await loadWorkers("ALL");
+      }
+    } finally {
+      setActingId(null);
+      setActingAction(null);
+    }
   }
 
   const TABS: { key: Tab; label: string }[] = [
@@ -82,6 +89,7 @@ export default function AdminUsersPage() {
           workers={workers}
           showApproval={tab === "WORKERS_PENDING"}
           actingId={actingId}
+          actingAction={actingAction}
           onApprove={(id)  => handleApproval(id, true)}
           onReject={(id)   => handleApproval(id, false)}
         />
@@ -93,11 +101,12 @@ export default function AdminUsersPage() {
 // ─── Workers table ────────────────────────────────────────────────────────────
 
 function WorkersTable({
-  workers, showApproval, actingId, onApprove, onReject,
+  workers, showApproval, actingId, actingAction, onApprove, onReject,
 }: {
   workers: WorkerRow[];
   showApproval: boolean;
   actingId: string | null;
+  actingAction: "approve" | "reject" | null;
   onApprove: (id: string) => void;
   onReject:  (id: string) => void;
 }) {

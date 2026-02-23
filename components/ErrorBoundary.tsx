@@ -23,7 +23,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[ErrorBoundary]", error, info.componentStack);
+    // Log only the error name (safe) — not message or stack which may contain PII.
+    // TODO: send to your telemetry/APM service.
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[ErrorBoundary]", error.name, info.componentStack?.split("\n")[1] ?? "");
+    }
   }
 
   reset = () => this.setState({ error: null });
@@ -39,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
           <p className="text-4xl">😕</p>
           <h3 className="text-lg font-semibold text-foreground">Something went wrong</h3>
-          <p className="text-sm text-muted max-w-xs">{error.message}</p>
+          <p className="text-sm text-muted max-w-xs">An unexpected error occurred. Please try again.</p>
           <Button size="sm" variant="outline" onClick={this.reset}>
             Retry
           </Button>

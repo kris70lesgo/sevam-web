@@ -24,12 +24,12 @@ export async function getWorkerJobs(): Promise<ActionResult<{
   completed: JobSummary[];
 }>> {
   const session = await getSession();
-  if (!session) return { ok: false, error: "Not authenticated.", code: "SERVER_ERROR" };
+  if (!session) return { ok: false, error: "Not authenticated.", code: "UNAUTHORIZED" };
 
   const workerProfile = await prisma.workerProfile.findUnique({
     where: { userId: session.userId },
   });
-  if (!workerProfile) return { ok: false, error: "Worker profile not found.", code: "SERVER_ERROR" };
+  if (!workerProfile) return { ok: false, error: "Worker profile not found.", code: "NOT_FOUND" };
 
   const [availableJobs, assignedJobs] = await prisma.$transaction([
     // Available: PENDING jobs matching worker skills (public queue)
@@ -72,10 +72,10 @@ export async function getWorkerJobs(): Promise<ActionResult<{
 
 export async function getWorkerEarnings(): Promise<ActionResult<WorkerEarnings>> {
   const session = await getSession();
-  if (!session) return { ok: false, error: "Not authenticated.", code: "SERVER_ERROR" };
+  if (!session) return { ok: false, error: "Not authenticated.", code: "UNAUTHORIZED" };
 
   const profile = await prisma.workerProfile.findUnique({ where: { userId: session.userId } });
-  if (!profile) return { ok: false, error: "Worker profile not found.", code: "SERVER_ERROR" };
+  if (!profile) return { ok: false, error: "Worker profile not found.", code: "NOT_FOUND" };
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 

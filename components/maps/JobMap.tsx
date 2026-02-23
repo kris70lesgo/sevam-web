@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   GoogleMap,
   Marker,
@@ -8,10 +8,7 @@ import {
 } from "@react-google-maps/api";
 import { Spinner } from "@/components/ui/spinner";
 
-interface LatLng {
-  lat: number;
-  lng: number;
-}
+import { LatLng } from "@/types/job";
 
 export interface JobMapProps {
   /** Initial centre of the map */
@@ -42,12 +39,17 @@ export function JobMap({
   height = "300px",
   className,
 }: JobMapProps) {
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
   });
 
   const mapRef = useRef<google.maps.Map | null>(null);
   const [pin, setPin] = useState<LatLng | undefined>(value);
+
+  // Sync pin when the value prop changes externally
+  useEffect(() => {
+    setPin(value);
+  }, [value]);
 
   const onLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
@@ -62,6 +64,17 @@ export function JobMap({
     },
     [interactive, onChange]
   );
+
+  if (loadError || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    return (
+      <div
+        style={{ height }}
+        className="flex items-center justify-center rounded-xl bg-surface-2 text-muted text-sm"
+      >
+        Map unavailable
+      </div>
+    );
+  }
 
   if (!isLoaded) {
     return (

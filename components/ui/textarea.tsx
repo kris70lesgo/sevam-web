@@ -10,9 +10,21 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, maxChars, id, value, onChange, ...props }, ref) => {
-    const textareaId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
-    const charCount = typeof value === "string" ? value.length : 0;
+    const reactId = React.useId();
+    const textareaId = id ?? label?.toLowerCase().replace(/\s+/g, "-") ?? reactId;
+
+    // Support uncontrolled mode for char counter
+    const [internalValue, setInternalValue] = React.useState("");
+    const isControlled = value !== undefined;
+    const charCount = isControlled
+      ? (typeof value === "string" ? value.length : 0)
+      : internalValue.length;
     const overLimit = maxChars ? charCount > maxChars : false;
+
+    function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+      if (!isControlled) setInternalValue(e.target.value);
+      onChange?.(e);
+    }
 
     return (
       <div className="flex flex-col gap-1.5">
@@ -28,8 +40,8 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           id={textareaId}
           ref={ref}
-          value={value}
-          onChange={onChange}
+          value={isControlled ? value : internalValue}
+          onChange={handleChange}
           className={cn(
             "w-full rounded-xl border border-border bg-input",
             "px-4 py-3 text-sm text-foreground placeholder:text-muted",

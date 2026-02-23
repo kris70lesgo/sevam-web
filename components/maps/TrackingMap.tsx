@@ -9,10 +9,7 @@ import {
 } from "@react-google-maps/api";
 import { Spinner } from "@/components/ui/spinner";
 
-interface LatLng {
-  lat: number;
-  lng: number;
-}
+import { LatLng } from "@/types/job";
 
 export interface TrackingMapProps {
   /** Customer / job location (blue marker) */
@@ -64,20 +61,20 @@ export function TrackingMap({
   height = "400px",
   className,
 }: TrackingMapProps) {
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
   });
 
-  const mapRef = useRef<google.maps.Map | null>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   const prevWorkerRef = useRef<LatLng | undefined>(workerLocation);
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
+  const onLoad = useCallback((m: google.maps.Map) => {
+    setMap(m);
   }, []);
 
   // Pan to worker when location changes
   useEffect(() => {
-    if (!mapRef.current || !workerLocation) return;
+    if (!map || !workerLocation) return;
     if (
       prevWorkerRef.current?.lat === workerLocation.lat &&
       prevWorkerRef.current?.lng === workerLocation.lng
@@ -85,17 +82,28 @@ export function TrackingMap({
       return;
 
     prevWorkerRef.current = workerLocation;
-    mapRef.current.panTo(workerLocation);
-  }, [workerLocation]);
+    map.panTo(workerLocation);
+  }, [map, workerLocation]);
 
   // Fit bounds to show both markers
   useEffect(() => {
-    if (!mapRef.current || !workerLocation) return;
+    if (!map || !workerLocation) return;
     const bounds = new google.maps.LatLngBounds();
     bounds.extend(jobLocation);
     bounds.extend(workerLocation);
-    mapRef.current.fitBounds(bounds, /* padding */ 60);
-  }, [jobLocation, workerLocation]);
+    map.fitBounds(bounds, /* padding */ 60);
+  }, [map, jobLocation, workerLocation]);
+
+  if (loadError || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    return (
+      <div
+        style={{ height }}
+        className="flex items-center justify-center rounded-xl bg-surface-2 text-muted text-sm"
+      >
+        Map unavailable
+      </div>
+    );
+ }
 
   if (!isLoaded) {
     return (

@@ -29,6 +29,7 @@ export async function createWorkerProfile(
 ): Promise<ActionResult<{ workerId: string }>> {
   const session = await getSession();
   if (!session) return { ok: false, error: "Not authenticated.", code: "SERVER_ERROR" };
+  if (session.userType === "ADMIN") return { ok: false, error: "Admins cannot create worker profiles.", code: "SERVER_ERROR" };
 
   const parsed = WorkerProfileSchema.safeParse(input);
   if (!parsed.success) {

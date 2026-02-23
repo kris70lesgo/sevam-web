@@ -1,4 +1,5 @@
 // Worker-facing types
+import type { JobType } from "@/lib/generated/prisma/client";
 
 export interface WorkerStats {
   totalJobs: number;
@@ -21,20 +22,8 @@ export interface NearbyWorker {
   lng: number;
 }
 
-export type SkillType =
-  | "PLUMBING"
-  | "ELECTRICAL"
-  | "PAINTING"
-  | "CARPENTRY"
-  | "CLEANING"
-  | "AC_REPAIR"
-  | "APPLIANCE_REPAIR"
-  | "OTHER";
-
-export interface CreateWorkerProfileInput {
-  skills: SkillType[];
-  bio?: string;
-}
+// Use Prisma's canonical JobType enum rather than duplicating it here.
+export type SkillType = JobType;
 
 export interface EarningsBreakdown {
   date: string;

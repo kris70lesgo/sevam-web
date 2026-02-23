@@ -62,6 +62,8 @@ export const useAuthStore = create<AuthStore>()(
         user: state.user,
         pendingPhone: state.pendingPhone,
       }),
+      // Prevents SSR hydration flashes: rehydrate explicitly from the client.
+      skipHydration: true,
     }
   )
 );

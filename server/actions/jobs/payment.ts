@@ -101,14 +101,19 @@ export async function verifyPayment(input: {
     return { ok: false, error: "Payment verification failed. Please contact support.", code: "SERVER_ERROR" };
   }
 
-  await prisma.payment.update({
-    where: { jobId },
-    data: {
-      razorpayPaymentId,
-      razorpaySignature,
-      status: "SUCCESS",
-    },
-  });
+  try {
+    await prisma.payment.update({
+      where: { jobId },
+      data: {
+        razorpayPaymentId,
+        razorpaySignature,
+        status: "SUCCESS",
+      },
+    });
+  } catch (err) {
+    console.error("[verifyPayment] DB update failed:", err);
+    return { ok: false, error: "Failed to record payment. Please contact support.", code: "SERVER_ERROR" };
+  }
 
   return { ok: true };
 }

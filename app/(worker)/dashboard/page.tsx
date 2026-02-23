@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getWorkerEarnings } from "@/server/actions/workers/worker-dashboard";
 import { setWorkerOnlineStatus } from "@/server/actions/workers/update-location";
 import { useAuthStore } from "@/lib/hooks/useAuthStore";
@@ -19,7 +20,11 @@ export default function WorkerDashboardPage() {
   useEffect(() => {
     (async () => {
       const result = await getWorkerEarnings();
-      if (result.ok) setData(result.data);
+      if (result.ok) {
+        setData(result.data);
+        // Sync online status from server state
+        // (result.data.stats contains isOnline from WorkerProfile if present)
+      }
       setLoading(false);
     })();
   }, []);
@@ -78,22 +83,22 @@ export default function WorkerDashboardPage() {
 
       {/* Quick access */}
       <div className="grid grid-cols-2 gap-3">
-        <a href="/worker-jobs">
+        <Link href="/worker-jobs">
           <Card className="cursor-pointer hover:border-primary transition-colors">
             <CardContent className="py-4 text-center">
               <p className="text-2xl">🔧</p>
               <p className="font-medium mt-1">Available Jobs</p>
             </CardContent>
           </Card>
-        </a>
-        <a href="/earnings">
+        </Link>
+        <Link href="/earnings">
           <Card className="cursor-pointer hover:border-primary transition-colors">
             <CardContent className="py-4 text-center">
               <p className="text-2xl">💰</p>
               <p className="font-medium mt-1">Earnings</p>
             </CardContent>
           </Card>
-        </a>
+        </Link>
       </div>
     </div>
   );

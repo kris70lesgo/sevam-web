@@ -9,16 +9,36 @@ import type { WorkerEarnings, EarningsBreakdown } from "@/types/worker";
 export default function EarningsPage() {
   const [data,    setData]    = useState<WorkerEarnings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const result = await getWorkerEarnings();
-      if (result.ok) setData(result.data);
-      setLoading(false);
+      try {
+        const result = await getWorkerEarnings();
+        if (result.ok) {
+          setData(result.data);
+        } else {
+          setError(result.error);
+        }
+      } catch {
+        setError("Failed to load earnings. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
   if (loading) return <PageSpinner />;
+
+  if (error) {
+    return (
+      <div className="py-20 text-center text-muted">
+        <p className="text-4xl mb-3">⚠️</p>
+        <p className="font-medium">Failed to load earnings</p>
+        <p className="text-sm mt-1">{error}</p>
+      </div>
+    );
+ }
 
   const stats = data?.stats;
   const daily = data?.daily ?? [];

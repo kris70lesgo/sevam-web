@@ -35,14 +35,17 @@ export function boundingBox(
   radiusKm: number
 ): { minLat: number; maxLat: number; minLng: number; maxLng: number } {
   const latDelta = radiusKm / R * (180 / Math.PI);
-  // Longitude delta varies by latitude
-  const lngDelta = (radiusKm / (R * Math.cos((lat * Math.PI) / 180))) * (180 / Math.PI);
+  // Longitude delta varies by latitude; guard against poles (cos → 0)
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  const lngDelta = Math.abs(cosLat) < 1e-12
+    ? 180
+    : (radiusKm / (R * cosLat)) * (180 / Math.PI);
 
   return {
-    minLat: lat - latDelta,
-    maxLat: lat + latDelta,
-    minLng: lng - lngDelta,
-    maxLng: lng + lngDelta,
+    minLat: Math.max(-90,  lat - latDelta),
+    maxLat: Math.min(90,   lat + latDelta),
+    minLng: Math.max(-180, lng - lngDelta),
+    maxLng: Math.min(180,  lng + lngDelta),
   };
 }
 

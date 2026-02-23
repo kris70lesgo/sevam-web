@@ -11,8 +11,7 @@ import { PageSpinner } from "@/components/ui";
 import { JOB_STATUS_LABEL, JOB_STATUS_COLOR } from "@/types/job";
 import { formatPrice } from "@/lib/utils/pricing";
 import type { JobDetails } from "@/types/job";
-
-interface LatLng { lat: number; lng: number; }
+import type { LatLng } from "@/types/job";
 
 export default function TrackJobPage() {
   const { id }    = useParams<{ id: string }>();
@@ -25,7 +24,7 @@ export default function TrackJobPage() {
     const result = await getJobDetails(id);
     if (result.ok) {
       setJob(result.data);
-      if (result.data.workerLat && result.data.workerLng) {
+      if (result.data.workerLat != null && result.data.workerLng != null) {
         setWorker({ lat: result.data.workerLat, lng: result.data.workerLng });
       }
     }
@@ -41,7 +40,7 @@ export default function TrackJobPage() {
     const channel = supabase
       .channel(`job:${id}`)
       .on("broadcast", { event: "WORKER_LOCATION" }, ({ payload }: { payload: Record<string, unknown> }) => {
-        if (payload?.lat && payload?.lng) {
+        if (payload?.lat != null && payload?.lng != null) {
           setWorker({ lat: payload.lat as number, lng: payload.lng as number });
         }
       })

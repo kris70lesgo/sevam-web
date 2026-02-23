@@ -40,10 +40,6 @@ export async function createJob(
 
   const { type, description, address, lat, lng } = parsed.data;
 
-  // Verify customer exists
-  const customer = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (!customer) return { ok: false, error: "Customer not found.", code: "SERVER_ERROR" };
-
   // Estimate price (no worker location yet — use base price)
   const { total: estimatedPrice } = estimatePrice(type as JobType);
 
@@ -95,7 +91,7 @@ async function notifyNearbyWorkers(
   if (tokens.length) {
     await sendPushToMany(tokens, {
       title: "New job near you!",
-      body: `${type.replace("_", " ")} job at ${address}`,
+      body: `${type.replace(/_/g, " ")} job at ${address}`,
       data: { jobId, type: "NEW_JOB" },
     });
   }

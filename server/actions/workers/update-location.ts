@@ -39,9 +39,16 @@ export async function updateWorkerLocation(
     return { ok: true }; // silently ignore, not an error
   }
 
-  await prisma.workerProfile.update({
-    where: { id: profile.id },
-    data:  { lat, lng, lastLocUpdate: new Date(), lastLocUpdateMs: now },
+  await prisma.workerProfile.upsert({
+    where:  { id: profile.id },
+    update: { lat, lng, lastLocUpdate: new Date(), lastLocUpdateMs: now },
+    create: {
+      userId: session.userId,
+      lat,
+      lng,
+      lastLocUpdate:   new Date(),
+      lastLocUpdateMs: now,
+    },
   });
 
   // Realtime broadcast if worker has an active job
@@ -49,13 +56,12 @@ export async function updateWorkerLocation(
   if (activeJob) {
     try {
       const supabase = createClient();
+      // httpSend broadcasts over HTTP without requiring a WebSocket subscription,
+      // which is correct for server-action (non-WS) contexts.
+      // send() would require an active subscription first.
       await supabase
         .channel(`job:${activeJob.id}`)
-        .send({
-          type:    "broadcast",
-          event:   "WORKER_LOCATION",
-          payload: { lat, lng, ts: Number(now) },
-        });
+        .httpSend("WORKER_LOCATION", { lat, lng, ts: Number(now) });
     } catch (err) {
       // Non-fatal — the DB update succeeded
       console.warn("[updateWorkerLocation] Realtime broadcast failed:", err);
@@ -73,10 +79,15 @@ export async function setWorkerOnlineStatus(isOnline: boolean): Promise<ActionRe
     return { ok: false, error: "Not authenticated.", code: "SERVER_ERROR" };
   }
 
-  await prisma.workerProfile.update({
+  // updateMany avoids a P2025 RecordNotFound error if the profile doesn't exist yet.
+  const { count } = await prisma.workerProfile.updateMany({
     where: { userId: session.userId },
     data:  { isOnline },
   });
+
+  if (count === 0) {
+    return { ok: false, error: "Worker profile not found.", code: "SERVER_ERROR" };
+  }
 
   return { ok: true };
 }

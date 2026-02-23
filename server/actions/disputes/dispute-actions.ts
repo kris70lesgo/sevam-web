@@ -63,13 +63,18 @@ export async function raiseDispute(
     })),
   });
 
-  for (const admin of admins.filter((a) => a.fcmToken)) {
-    sendPushNotification(admin.fcmToken!, {
-      title: "New dispute raised",
-      body:  `Dispute for job ${jobId.slice(0, 8)}...`,
-      data:  { disputeId: dispute.id },
-    }).catch(console.warn);
-  }
+  // Notify admins via push in parallel (fire-and-forget, non-blocking)
+  await Promise.allSettled(
+    admins
+      .filter((a) => a.fcmToken)
+      .map((admin) =>
+        sendPushNotification(admin.fcmToken!, {
+          title: "New dispute raised",
+          body:  `Dispute for job ${jobId.slice(0, 8)}...`,
+          data:  { disputeId: dispute.id },
+        })
+      )
+  );
 
   return { ok: true, data: { disputeId: dispute.id } };
 }
@@ -143,18 +148,24 @@ export async function resolveDispute(
 // ─── List open disputes (admin) ───────────────────────────────────────────────
 
 export async function listDisputes(
-  status?: "OPEN" | "RESOLVED"
+  status?: "OPEN" | "RESOLVED",
+  limit?: number,
+  cursor?: string
 ): Promise<ActionResult<{ disputes: Awaited<ReturnType<typeof fetchDisputes>> }>> {
   const session = await getSession();
   if (!session || session.userType !== "ADMIN") {
     return { ok: false, error: "Admin access required.", code: "SERVER_ERROR" };
   }
 
-  const disputes = await fetchDisputes(status ?? "OPEN");
+  const disputes = await fetchDisputes(status ?? "OPEN", limit, cursor);
   return { ok: true, data: { disputes } };
 }
 
-async function fetchDisputes(status: "OPEN" | "RESOLVED") {
+async function fetchDisputes(
+  status: "OPEN" | "RESOLVED",
+  limit = 50,
+  cursor?: string
+) {
   return prisma.jobDispute.findMany({
     where:   { status },
     include: {
@@ -162,6 +173,7 @@ async function fetchDisputes(status: "OPEN" | "RESOLVED") {
       job:      { select: { id: true, type: true, address: true } },
     },
     orderBy: { createdAt: "desc" },
-    take:    50,
+    take:    limit,
+    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
   });
 }

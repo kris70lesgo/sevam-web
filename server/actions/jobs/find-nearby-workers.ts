@@ -28,15 +28,8 @@ export async function findNearbyWorkers(
 
   const box = boundingBox(lat, lng, radiusKm);
 
-  // Find workers with active jobs (to exclude)
-  const busyWorkers = await prisma.job.findMany({
-    where: { status: { in: ["ACCEPTED", "IN_PROGRESS"] } },
-    select: { workerId: true },
-  });
-  const busyIds = new Set(busyWorkers.map((j) => j.workerId).filter(Boolean) as string[]);
-
-  // Fetch candidates within bounding box
-  const candidates = await prisma.workerProfile.findMany({
+  // First do a cheap bounding-box pass to get candidate IDs
+  const candidateProfiles = await prisma.workerProfile.findMany({
     where: {
       isOnline: true,
       isApproved: true,
@@ -44,20 +37,35 @@ export async function findNearbyWorkers(
       lng: { gte: box.minLng, lte: box.maxLng },
       ...(jobType ? { skills: { has: jobType } } : {}),
     },
+    select: { id: true },
+  });
+  const candidateIds = candidateProfiles.map((p) => p.id);
+
+  // Find workers with active jobs — scoped to candidates only (avoids full table scan)
+  const busyWorkers = await prisma.job.findMany({
+    where: { status: { in: ["ACCEPTED", "IN_PROGRESS"] }, workerId: { in: candidateIds } },
+    select: { workerId: true },
+  });
+  const busyIds = new Set(busyWorkers.map((j) => j.workerId).filter(Boolean) as string[]);
+
+  // Fetch full candidate data (re-uses the same bounding box filter)
+  const candidates = await prisma.workerProfile.findMany({
+    where: {
+      id: { in: candidateIds },
+    },
     include: {
-      user: { select: { id: true, phone: true, name: true, fcmToken: true } },
+      user: { select: { id: true, phone: true, name: true } },
     },
   });
 
-  // Exact distance + exclude busy workers
+  // Exact distance + exclude busy workers + require known location
   const withDistance = candidates
     .filter((w) => !busyIds.has(w.id))
-    .map((w) => {
-      const distanceKm = w.lat && w.lng
-        ? haversineKm(lat, lng, w.lat, w.lng)
-        : radiusKm; // fallback for workers without lat/lng
-      return { worker: w, distanceKm };
-    })
+    .filter((w) => w.lat != null && w.lng != null)
+    .map((w) => ({
+      worker: w,
+      distanceKm: haversineKm(lat, lng, w.lat!, w.lng!),
+    }))
     .filter(({ distanceKm }) => distanceKm <= radiusKm);
 
   // Score: lower is better

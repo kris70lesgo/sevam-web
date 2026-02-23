@@ -86,8 +86,11 @@ export async function getJobDetails(
 
   if (!job) return { ok: false, error: "Job not found.", code: "SERVER_ERROR" };
 
-  // Make sure the customer owns this job (or it's an admin)
+  // Make sure the requester owns this job (or is an admin)
   if (session.userType === "CUSTOMER" && job.customerId !== session.userId) {
+    return { ok: false, error: "Not authorised.", code: "SERVER_ERROR" };
+  }
+  if (session.userType === "WORKER" && job.worker?.userId !== session.userId) {
     return { ok: false, error: "Not authorised.", code: "SERVER_ERROR" };
   }
 

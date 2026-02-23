@@ -33,9 +33,14 @@ export default function AdminAnalyticsPage() {
 
   async function handleResolve(id: string) {
     setResolving(id);
-    await resolveDispute(id, "Resolved by admin after review.");
-    setDisputes((prev) => prev.filter((d) => d.id !== id));
-    setResolving(null);
+    try {
+      const result = await resolveDispute(id, "Resolved by admin after review.");
+      if (result.ok) {
+        setDisputes((prev) => prev.filter((d) => d.id !== id));
+      }
+    } finally {
+      setResolving(null);
+    }
   }
 
   if (loading) return <PageSpinner />;

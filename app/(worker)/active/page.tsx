@@ -7,7 +7,6 @@ import { updateWorkerLocation } from "@/server/actions/workers/update-location";
 import { Card, CardContent, CardHeader, CardTitle, Button, PageSpinner } from "@/components/ui";
 import { JOB_TYPE_META, JOB_STATUS_LABEL } from "@/types/job";
 import { formatPrice } from "@/lib/utils/pricing";
-import { createClient } from "@/lib/db/supabase";
 import type { JobSummary } from "@/types/job";
 
 export default function ActiveJobPage() {
@@ -27,9 +26,9 @@ export default function ActiveJobPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // GPS tracking while there is an active job
+  // GPS tracking — only while job is IN_PROGRESS
   useEffect(() => {
-    if (!job) return;
+    if (!job || job.status !== "IN_PROGRESS") return;
     if (!navigator.geolocation) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
