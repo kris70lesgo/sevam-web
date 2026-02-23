@@ -43,7 +43,7 @@ export async function updateWorkerLocation(
       id:              profile.id,
       lastLocUpdateMs: { lte: now - THROTTLE_MS },
     },
-    data: { lat, lng, lastLocUpdate: new Date(), lastLocUpdateMs: now },
+    data: { lat, lng, lastLocUpdateMs: now },
   });
 
   if (count === 0) {

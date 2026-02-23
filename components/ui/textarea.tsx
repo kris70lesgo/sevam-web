@@ -11,7 +11,9 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, maxChars, id, value, onChange, defaultValue, ...props }, ref) => {
     const reactId = React.useId();
-    const textareaId = id ?? label?.toLowerCase().replace(/\s+/g, "-") ?? reactId;
+    // Always include reactId suffix when deriving from label to prevent duplicate IDs
+    // when multiple textareas share the same label text.
+    const textareaId = id ?? (label ? `${label.toLowerCase().replace(/\s+/g, "-")}-${reactId}` : reactId);
 
     // Support uncontrolled mode for char counter.
     // Initialize from defaultValue so the counter is correct from the first render.
@@ -43,6 +45,11 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           value={isControlled ? value : internalValue}
           onChange={handleChange}
+          aria-invalid={Boolean(error || overLimit)}
+          aria-describedby={
+            error ? `${textareaId}-error` :
+            overLimit ? `${textareaId}-error` : undefined
+          }
           className={cn(
             "w-full rounded-xl border border-border bg-input",
             "px-4 py-3 text-sm text-foreground placeholder:text-muted",
@@ -58,7 +65,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 
         <div className="flex items-center justify-between">
           {error ? (
-            <p className="text-xs text-error" role="alert">
+            <p id={`${textareaId}-error`} className="text-xs text-error" role="alert">
               {error}
             </p>
           ) : (

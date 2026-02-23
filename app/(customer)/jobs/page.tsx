@@ -30,14 +30,20 @@ export default function CustomerJobsPage() {
   async function load(status?: JobStatus) {
     setLoading(true);
     setError(null);
-    const result = await getCustomerJobs({ status, limit: 30 });
-    if (result.ok) {
-      setJobs(result.data.jobs);
-    } else {
+    try {
+      const result = await getCustomerJobs({ status, limit: 30 });
+      if (result.ok) {
+        setJobs(result.data.jobs);
+      } else {
+        setJobs([]);
+        setError(result.error);
+      }
+    } catch (err) {
       setJobs([]);
-      setError(result.error);
+      setError(err instanceof Error ? err.message : "Unexpected error");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -126,7 +132,7 @@ function JobCard({ job }: { job: JobSummary }) {
             })}
           </span>
           <span className="font-medium">
-            {job.finalPrice
+            {job.finalPrice != null
               ? formatPrice(job.finalPrice)
               : `~${formatPrice(job.estimatedPrice)}`}
           </span>

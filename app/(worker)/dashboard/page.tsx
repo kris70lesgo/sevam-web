@@ -47,7 +47,7 @@ export default function WorkerDashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">
-            Hi, {user?.userId?.slice(0, 6)}
+            Hi, {user?.phone ?? "there"}
           </h1>
           <p className="text-sm text-muted">Ready to work?</p>
         </div>

@@ -61,7 +61,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
       onBlur?.(e);
     }
 
-    // Keep caret at end when value changes
+    // Filter non-digit keystrokes; allow control, meta and navigation keys.
     function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
       const input = e.currentTarget;
       // Allow: Ctrl/Cmd shortcuts (copy, paste, select all, etc.)

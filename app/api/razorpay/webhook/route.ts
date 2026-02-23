@@ -39,7 +39,9 @@ export async function POST(req: NextRequest) {
 
     if (razorpayOrderId && razorpayPaymentId) {
       const payment = await prisma.payment.findFirst({ where: { razorpayOrderId } });
-      if (payment) {
+      if (!payment) {
+        console.warn("[Razorpay Webhook] No payment record found for order:", razorpayOrderId);
+      } else {
         try {
           await prisma.payment.update({
             where: { id: payment.id },

@@ -11,7 +11,9 @@ export interface InputProps
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, label, error, hint, id, ...props }, ref) => {
     const reactId = React.useId();
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-") ?? reactId;
+    // Always include reactId suffix when deriving from label to prevent duplicate IDs
+    // when multiple inputs share the same label text.
+    const inputId = id ?? (label ? `${label.toLowerCase().replace(/\s+/g, "-")}-${reactId}` : reactId);
 
     return (
       <div className="flex flex-col gap-1.5">

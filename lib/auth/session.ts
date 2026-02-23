@@ -146,6 +146,10 @@ export async function refreshSession(): Promise<SessionPayload | null> {
   if (!user) return null;
   // TODO: when bannedAt column is added: if (user.bannedAt) return null;
 
+  // Defensive: validate the DB value matches the expected enum (same guard as verifyOtp).
+  if (!["CUSTOMER", "WORKER", "ADMIN"].includes(user.userType)) {
+    return null;
+  }
   const newPayload: SessionPayload = {
     userId: user.id,
     phone: user.phone,

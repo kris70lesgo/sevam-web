@@ -91,7 +91,8 @@ export async function findNearbyWorkers(
     totalJobs:  w.totalJobs,
     photoUrl:   w.photoUrl,
     distanceKm,
-    lat:        w.lat ?? lat,
-    lng:        w.lng ?? lng,
+    // w.lat / w.lng are guaranteed non-null by the .filter(w => w.lat != null) above.
+    lat:        w.lat!,
+    lng:        w.lng!,
   }));
 }

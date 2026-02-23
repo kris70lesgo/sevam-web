@@ -97,10 +97,14 @@ export async function startJob(jobId: string): Promise<ActionResult> {
     return { ok: false, error: `Cannot start job (status: ${job.status}).`, code: "SERVER_ERROR" };
   }
 
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: "IN_PROGRESS", startedAt: new Date() },
+  // Atomic update — include status in WHERE to prevent a double-start race condition.
+  const updated = await prisma.job.updateMany({
+    where: { id: jobId, workerId: workerProfile.id, status: job.status },
+    data:  { status: "IN_PROGRESS", startedAt: new Date() },
   });
+  if (updated.count === 0) {
+    return { ok: false, error: `Cannot start job (status: ${job.status}).`, code: "SERVER_ERROR" };
+  }
 
   await notifyCustomer(job.customerId, jobId, "Work started!", "Your worker has started the job.");
   return { ok: true };

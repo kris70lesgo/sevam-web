@@ -94,7 +94,7 @@ export default function TrackJobPage() {
           <p><span className="text-muted">Description:</span> {job.description}</p>
           <p>
             <span className="text-muted">Price:</span>{" "}
-            {job.finalPrice ? formatPrice(job.finalPrice) : `~${formatPrice(job.estimatedPrice)}`}
+            {job.finalPrice != null ? formatPrice(job.finalPrice) : `~${formatPrice(job.estimatedPrice)}`}
           </p>
         </CardContent>
       </Card>

@@ -50,11 +50,11 @@ export async function sendSms(to: string, body: string): Promise<SmsResult> {
     const json = isJson ? await res.json().catch(() => null) : null;
     const text = !isJson ? await res.text().catch(() => "") : null;
 
-    if (!res.ok) {
+    if (!res.ok || !json?.sid) {
       return { ok: false, error: json?.message ?? text ?? `Twilio error ${res.status}` };
     }
 
-    return { ok: true, sid: json?.sid };
+    return { ok: true, sid: json.sid };
   } catch (err) {
     // Log only a safe reference, not the full error which may contain credentials.
     const message = err instanceof Error ? err.message : "Unknown SMS error";

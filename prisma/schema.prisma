@@ -85,9 +85,7 @@ model WorkerProfile {
 
   lat             Float?
   lng             Float?
-  /// Millisecond-precision timestamp used for ordering concurrent location updates.
-  /// Prefer this over lastLocUpdate (DateTime) which loses sub-second precision.
-  lastLocUpdate   DateTime?
+  /// Millisecond epoch used for atomic throttle checks and ordering concurrent location updates.
   lastLocUpdateMs BigInt    @default(0)
 
   idDocUrl        String?

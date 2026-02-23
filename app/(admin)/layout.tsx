@@ -71,7 +71,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="border-t border-border bg-surface md:hidden">
           <ul className="flex">
             {NAV.map((item) => {
-              const active = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
+              const active = pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <li key={item.href} className="flex-1">
                   <Link

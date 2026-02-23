@@ -22,7 +22,9 @@ export function haversineKm(
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
 
-  return 2 * R * Math.asin(Math.sqrt(a));
+  // Clamp to [0, 1] to guard against floating-point drift on antipodal points.
+  const clampedA = Math.min(1, Math.max(0, a));
+  return 2 * R * Math.asin(Math.sqrt(clampedA));
 }
 
 /**
@@ -41,11 +43,14 @@ export function boundingBox(
     ? 180
     : (radiusKm / (R * cosLat)) * (180 / Math.PI);
 
+  // When the radius crosses the ±180° dateline, clamping would exclude valid points.
+  // Fall back to the full longitude span in that case.
+  const crossesDateline = lng - lngDelta < -180 || lng + lngDelta > 180;
   return {
-    minLat: Math.max(-90,  lat - latDelta),
-    maxLat: Math.min(90,   lat + latDelta),
-    minLng: Math.max(-180, lng - lngDelta),
-    maxLng: Math.min(180,  lng + lngDelta),
+    minLat: Math.max(-90, lat - latDelta),
+    maxLat: Math.min(90,  lat + latDelta),
+    minLng: crossesDateline ? -180 : lng - lngDelta,
+    maxLng: crossesDateline ?  180 : lng + lngDelta,
   };
 }
 
