@@ -33,8 +33,11 @@ export interface ErrorContext {
  * e.g. +919876543210 → +91XXXXXX10
  */
 function maskPhone(phone: string): string {
-  // /(\.+\d{2})\d{6}(\d{2})$/ — escape + and use \d for digit class
-  return phone.replace(/(\+\d{2})\d{6}(\d{2})$/, "$1XXXXXX$2");
+  // Handles variable-length national numbers (e.g. +91 + 10 digits):
+  // capture country code, optional 0-2 leading national digits, 6 middle digits
+  // (to be masked), and the last 2 digits.
+  // +919876543210 → +91XXXXXX10  |  +9112345678 → +91XXXXXX78
+  return phone.replace(/(\+\d{2})(\d{0,2})\d{6}(\d{2})$/, "$1$2XXXXXX$3");
 }
 
 /** Apply common scope tags/user from ErrorContext. */

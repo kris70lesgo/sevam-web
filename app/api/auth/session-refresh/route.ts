@@ -25,17 +25,11 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-real-ip") ||
     null;
 
-  // Verify the refresh token early so we can use the userId as a fallback key.
-  const rawRefreshToken = req.cookies.get("sevam_refresh")?.value;
-  if (!rawRefreshToken) {
-    return NextResponse.json(null, { status: 401 });
-  }
-  const refreshPayload = await verifyRefreshToken(rawRefreshToken);
-  if (!refreshPayload) {
-    return NextResponse.json(null, { status: 401 });
-  }
-
-  const rlKey = ip ?? `user:${refreshPayload.userId}`;
+  // Rate-limit BEFORE inspecting the token so that missing/invalid-token
+  // requests are also throttled. Use IP when available; fall back to "anon"
+  // (a shared bucket for unresolvable clients — acceptable because real
+  // authenticated traffic will always carry an IP via the proxy).
+  const rlKey = ip ?? "anon";
   const rl = await checkRateLimit(sessionRefreshLimiter, rlKey);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -45,6 +39,15 @@ export async function POST(req: NextRequest) {
         headers: { "Retry-After": String(rl.retryAfter ?? 60) },
       }
     );
+  }
+
+  const rawRefreshToken = req.cookies.get("sevam_refresh")?.value;
+  if (!rawRefreshToken) {
+    return NextResponse.json(null, { status: 401 });
+  }
+  const refreshPayload = await verifyRefreshToken(rawRefreshToken);
+  if (!refreshPayload) {
+    return NextResponse.json(null, { status: 401 });
   }
 
   try {

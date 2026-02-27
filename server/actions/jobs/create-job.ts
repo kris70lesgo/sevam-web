@@ -60,12 +60,12 @@ export async function createJob(
   const description = sanitizeDescription(parsed.data.description);
   const address     = sanitizeAddress(parsed.data.address);
 
-  // Re-validate sanitized values — stripping HTML can shrink inputs below the
-  // Zod constraints that were checked before sanitization.
-  if (description.length < 10)
-    return { ok: false, error: "Description must be at least 10 characters.", code: "SERVER_ERROR" };
-  if (address.length < 5)
-    return { ok: false, error: "Address is required.", code: "SERVER_ERROR" };
+  // Re-parse the sanitized payload through JobSchema so all constraints
+  // (min/max length and any future rules) are enforced after transformation.
+  const sanitizedParse = JobSchema.safeParse({ ...parsed.data, description, address });
+  if (!sanitizedParse.success) {
+    return { ok: false, error: sanitizedParse.error.issues[0].message, code: "SERVER_ERROR" };
+  }
 
   // Estimate price (no worker location yet — use base price)
   const { total: estimatedPrice } = estimatePrice(type as JobType);
