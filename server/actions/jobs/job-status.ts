@@ -1,11 +1,19 @@
 "use server";
 
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { sendPushNotification } from "@/lib/utils/notifications";
 import { captureError } from "@/lib/utils/monitoring";
 import type { ActionResult } from "@/types/auth";
 import type { JobStatus } from "@/lib/generated/prisma/client";
+
+// ─── Validation schemas ──────────────────────────────────────────────────────
+
+const CancelJobSchema = z.object({
+  jobId:  z.string().min(1, "jobId is required"),
+  reason: z.string().max(500).optional(),
+});
 
 // ─── State machine ────────────────────────────────────────────────────────────
 //  PENDING → ACCEPTED → IN_PROGRESS → COMPLETED
@@ -186,6 +194,12 @@ export async function cancelJob(
   jobId: string,
   reason?: string,
 ): Promise<ActionResult> {
+  // ── Zod validation ─────────────────────────────────────────────────────────
+  const parsed = CancelJobSchema.safeParse({ jobId, reason });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message, code: "SERVER_ERROR" };
+  }
+
   const session = await getSession();
   if (!session) return { ok: false, error: "Not authenticated.", code: "SERVER_ERROR" };
 
@@ -236,25 +250,21 @@ export async function cancelJob(
     await prisma.$transaction(async (tx) => {
       if (userType === "WORKER") {
         // Worker declines → job returns to PENDING, worker assignment cleared.
-        await tx.job.update({
-          where: { id: jobId },
+        // Use updateMany with status guard to prevent stale-read race.
+        const updated = await tx.job.updateMany({
+          where: { id: jobId, status: "ACCEPTED" },
           data: {
-            status:             "PENDING",
-            workerId:           null,
-            acceptedAt:         null,
-            cancellationReason: reason ?? null,
-            cancelledBy,
+            status:     "PENDING",
+            workerId:   null,
+            acceptedAt: null,
           },
         });
+        if (updated.count === 0) {
+          throw new Error("Job is no longer in ACCEPTED state.");
+        }
 
         // Notify customer that the worker cancelled so they know to wait for re-assignment.
-        if (job.customer?.fcmToken) {
-          await sendPushNotification(job.customer.fcmToken, {
-            title: "Worker cancelled",
-            body:  "Your assigned worker cancelled. We're finding you a new one.",
-            data:  { jobId },
-          }).catch(() => null);
-        }
+        // Always create a Notification record regardless of push token.
         await tx.notification.create({
           data: {
             userId: job.customerId,
@@ -263,10 +273,18 @@ export async function cancelJob(
             body:   "Your assigned worker cancelled. We're finding you a new one.",
           },
         });
+        if (job.customer?.fcmToken) {
+          await sendPushNotification(job.customer.fcmToken, {
+            title: "Worker cancelled",
+            body:  "Your assigned worker cancelled. We're finding you a new one.",
+            data:  { jobId },
+          }).catch(() => null);
+        }
       } else {
         // Customer or admin cancels → terminal CANCELLED state.
-        await tx.job.update({
-          where: { id: jobId },
+        // Use updateMany with status guard to prevent stale-read race.
+        const updated = await tx.job.updateMany({
+          where: { id: jobId, status: job.status },
           data: {
             status:             "CANCELLED",
             cancelledAt:        new Date(),
@@ -275,14 +293,13 @@ export async function cancelJob(
             penaltyApplied,
           },
         });
+        if (updated.count === 0) {
+          throw new Error("Job status has changed concurrently.");
+        }
 
         // Notify the assigned worker (if any) that the job was cancelled.
-        if (job.worker?.user?.fcmToken) {
-          await sendPushNotification(job.worker.user.fcmToken, {
-            title: "Job cancelled",
-            body:  "The customer has cancelled this job.",
-            data:  { jobId },
-          }).catch(() => null);
+        // Always create a Notification record regardless of push token.
+        if (job.worker) {
           await tx.notification.create({
             data: {
               userId: job.worker.userId,
@@ -291,6 +308,13 @@ export async function cancelJob(
               body:   "The customer has cancelled this job.",
             },
           });
+          if (job.worker.user?.fcmToken) {
+            await sendPushNotification(job.worker.user.fcmToken, {
+              title: "Job cancelled",
+              body:  "The customer has cancelled this job.",
+              data:  { jobId },
+            }).catch(() => null);
+          }
         }
       }
     });

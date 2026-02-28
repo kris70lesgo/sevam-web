@@ -84,29 +84,39 @@ export function useOfflineQueue<TInput>({
 
   // ── Flush ──────────────────────────────────────────────────────────────────
 
+  const flushingRef = useRef(false);
+
   const flush = useCallback(async () => {
-    const queue = readQueue();
-    if (queue.length === 0) return;
+    // Prevent concurrent flush calls from processing the same items
+    if (flushingRef.current) return;
+    flushingRef.current = true;
 
-    const remaining: typeof queue = [];
+    try {
+      const queue = readQueue();
+      if (queue.length === 0) return;
 
-    for (const item of queue) {
-      const retries = item.retries ?? 0;
-      if (retries >= maxRetries) continue; // drop exhausted items
+      const remaining: typeof queue = [];
 
-      try {
-        const ok = await executeRef.current(item.input);
-        if (!ok) {
+      for (const item of queue) {
+        const retries = item.retries ?? 0;
+        if (retries >= maxRetries) continue; // drop exhausted items
+
+        try {
+          const ok = await executeRef.current(item.input);
+          if (!ok) {
+            remaining.push({ ...item, retries: retries + 1 });
+          }
+          // ok === true → item successfully processed, don't keep it
+        } catch {
           remaining.push({ ...item, retries: retries + 1 });
         }
-        // ok === true → item successfully processed, don't keep it
-      } catch {
-        remaining.push({ ...item, retries: retries + 1 });
       }
-    }
 
-    writeQueue(remaining);
-    if (remaining.length === 0) flushRef.current?.();
+      writeQueue(remaining);
+      if (remaining.length === 0) flushRef.current?.();
+    } finally {
+      flushingRef.current = false;
+    }
   }, [readQueue, writeQueue, maxRetries]);
 
   // ── Listen for online events ───────────────────────────────────────────────
@@ -124,6 +134,13 @@ export function useOfflineQueue<TInput>({
 
   const enqueue = useCallback(
     (input: TInput) => {
+      // If we're online, execute immediately without persisting to queue.
+      // This avoids the item replaying on the next flush.
+      if (navigator.onLine) {
+        void executeRef.current(input);
+        return;
+      }
+
       const queue = readQueue();
       const item: QueuedAction<TInput> & { retries: number } = {
         id:        crypto.randomUUID(),
@@ -132,11 +149,6 @@ export function useOfflineQueue<TInput>({
         retries:   0,
       };
       writeQueue([...queue, item]);
-
-      // If we're online, execute immediately without queuing.
-      if (navigator.onLine) {
-        void executeRef.current(input);
-      }
     },
     [readQueue, writeQueue],
   );

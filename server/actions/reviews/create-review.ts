@@ -1,9 +1,23 @@
 "use server";
 
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { captureError } from "@/lib/utils/monitoring";
 import type { ActionResult } from "@/types/auth";
+
+// ─── Validation schemas ──────────────────────────────────────────────────────
+
+const CreateReviewSchema = z.object({
+  jobId:   z.string().min(1, "jobId is required"),
+  rating:  z.number().int().min(1).max(5, "Rating must be between 1 and 5"),
+  comment: z.string().max(1000).optional(),
+});
+
+const GetWorkerReviewsSchema = z.object({
+  workerId: z.string().min(1, "workerId is required"),
+  limit:    z.number().int().min(1).max(50).default(10),
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,16 +41,17 @@ export interface CreateReviewInput {
 export async function createReview(
   input: CreateReviewInput,
 ): Promise<ActionResult<{ reviewId: string }>> {
+  // ── Zod validation ─────────────────────────────────────────────────────────
+  const parsed = CreateReviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message, code: "SERVER_ERROR" };
+  }
+
   const session = await getSession();
   if (!session) return { ok: false, error: "Not authenticated.", code: "SERVER_ERROR" };
   if (session.userType !== "CUSTOMER") return { ok: false, error: "Only customers can submit reviews.", code: "SERVER_ERROR" };
 
-  const { jobId, rating, comment } = input;
-
-  // Validate rating range
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    return { ok: false, error: "Rating must be an integer between 1 and 5.", code: "SERVER_ERROR" };
-  }
+  const { jobId, rating, comment } = parsed.data;
 
   const job = await prisma.job.findUnique({
     where: { id: jobId },
@@ -72,8 +87,7 @@ export async function createReview(
       await tx.workerProfile.update({
         where: { id: job.workerId! },
         data: {
-          rating:    agg._avg.rating ?? 0,
-          totalJobs: agg._count.rating,
+          rating: agg._avg.rating ?? 0,
         },
       });
 
@@ -101,11 +115,18 @@ export async function getWorkerReviews(
   workerId: string,
   limit = 10,
 ): Promise<ActionResult<WorkerReview[]>> {
+  // ── Zod validation ─────────────────────────────────────────────────────────
+  const parsed = GetWorkerReviewsSchema.safeParse({ workerId, limit });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message, code: "SERVER_ERROR" };
+  }
+  const clampedLimit = parsed.data.limit;
+
   try {
     const reviews = await prisma.jobReview.findMany({
-      where:   { workerId },
+      where:   { workerId: parsed.data.workerId },
       orderBy: { createdAt: "desc" },
-      take:    limit,
+      take:    clampedLimit,
       select: {
         id:        true,
         rating:    true,

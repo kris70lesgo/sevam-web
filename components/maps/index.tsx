@@ -19,12 +19,15 @@
  */
 
 import dynamic from "next/dynamic";
-import type { ComponentType } from "react";
+import type { ComponentProps } from "react";
+import type { JobMap } from "./JobMap";
+import type { TrackingMap } from "./TrackingMap";
 
 // ── Shared skeleton ──────────────────────────────────────────────────────────
 export function MapSkeleton({ height = 240 }: { height?: number }) {
   return (
     <div
+      role="status"
       aria-busy="true"
       aria-label="Loading map…"
       className="w-full rounded-xl bg-muted/40 animate-pulse"
@@ -34,8 +37,7 @@ export function MapSkeleton({ height = 240 }: { height?: number }) {
 }
 
 // ── JobMap ───────────────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const LazyJobMap: ComponentType<any> = dynamic(
+export const LazyJobMap = dynamic<ComponentProps<typeof JobMap>>(
   () => import("./JobMap").then((m) => m.JobMap),
   {
     ssr:     false,
@@ -44,8 +46,7 @@ export const LazyJobMap: ComponentType<any> = dynamic(
 );
 
 // ── TrackingMap ──────────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const LazyTrackingMap: ComponentType<any> = dynamic(
+export const LazyTrackingMap = dynamic<ComponentProps<typeof TrackingMap>>(
   () => import("./TrackingMap").then((m) => m.TrackingMap),
   {
     ssr:     false,

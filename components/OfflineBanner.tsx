@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { cn } from "@/lib/utils/cn";
 
 /**
  * Banner that appears at the top of the page when the device goes offline,
@@ -11,6 +12,7 @@ import { useState, useEffect } from "react";
 export function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(false);
   const [justReconnected, setJustReconnected] = useState(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Initialise from current navigator state (not available during SSR)
@@ -25,8 +27,8 @@ export function OfflineBanner() {
       setIsOffline(false);
       setJustReconnected(true);
       // Show "reconnected" banner briefly, then hide it.
-      const t = setTimeout(() => setJustReconnected(false), 3000);
-      return () => clearTimeout(t);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = setTimeout(() => setJustReconnected(false), 3000);
     };
 
     window.addEventListener("offline", handleOffline);
@@ -34,6 +36,7 @@ export function OfflineBanner() {
     return () => {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online",  handleOnline);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
   }, []);
 
@@ -44,13 +47,11 @@ export function OfflineBanner() {
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className={[
+      className={cn(
         "fixed top-0 left-0 right-0 z-50 py-2 px-4 text-center text-sm font-medium",
         "transition-all duration-300",
-        isOffline
-          ? "bg-red-600 text-white"
-          : "bg-green-600 text-white",
-      ].join(" ")}
+        isOffline ? "bg-red-600 text-white" : "bg-green-600 text-white",
+      )}
     >
       {isOffline
         ? "⚠️ You're offline — some features may not be available."

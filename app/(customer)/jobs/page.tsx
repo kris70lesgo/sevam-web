@@ -109,7 +109,9 @@ export default function CustomerJobsPage() {
       ) : (
         <ul id="job-list" role="tabpanel" aria-live="polite" className="space-y-3">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <li key={job.id}>
+              <JobCard job={job} />
+            </li>
           ))}
         </ul>
       )}
