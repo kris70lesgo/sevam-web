@@ -9,6 +9,7 @@ import type { ActionResult } from "@/types/auth";
 
 const ORDER_CREATE_CLAIM_PREFIX = "ORDER_CREATE_CLAIM:";
 const REFUND_CLAIM_PREFIX = "REFUND_CLAIM:";
+const CLAIM_STALE_MS = 5 * 60 * 1000;
 
 const CreatePaymentOrderSchema = z.object({
   jobId: z.string().min(1, "jobId is required"),
@@ -92,6 +93,7 @@ export async function createPaymentOrder(
   }
 
   const amountPaise = Math.round(Number(job.finalPrice ?? job.estimatedPrice) * 100);
+  const staleBefore = new Date(Date.now() - CLAIM_STALE_MS);
 
   try {
     await prisma.payment.upsert({
@@ -117,7 +119,11 @@ export async function createPaymentOrder(
     if (claim.count === 0) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const current = await prisma.payment.findUnique({ where: { jobId } });
-        if (current?.razorpayOrderId && !current.razorpayOrderId.startsWith(ORDER_CREATE_CLAIM_PREFIX)) {
+        if (
+          current?.razorpayOrderId &&
+          !current.razorpayOrderId.startsWith(ORDER_CREATE_CLAIM_PREFIX) &&
+          current.status === "PENDING"
+        ) {
           return {
             ok: true,
             data: {
@@ -127,6 +133,26 @@ export async function createPaymentOrder(
               keyId: process.env.RAZORPAY_KEY_ID ?? "",
             },
           };
+        }
+
+        if (
+          current?.razorpayOrderId?.startsWith(ORDER_CREATE_CLAIM_PREFIX) &&
+          current.status === "PENDING" &&
+          current.updatedAt <= staleBefore
+        ) {
+          await prisma.payment.updateMany({
+            where: {
+              jobId,
+              status: "PENDING",
+              razorpayOrderId: current.razorpayOrderId,
+              updatedAt: { lte: staleBefore },
+            },
+            data: { razorpayOrderId: null },
+          });
+        }
+
+        if (current && current.status !== "PENDING") {
+          return { ok: false, error: "This job is not payable.", code: "SERVER_ERROR" };
         }
         await new Promise((resolve) => setTimeout(resolve, 120));
       }
@@ -147,7 +173,11 @@ export async function createPaymentOrder(
 
     if (saved.count === 0) {
       const current = await prisma.payment.findUnique({ where: { jobId } });
-      if (current?.razorpayOrderId && !current.razorpayOrderId.startsWith(ORDER_CREATE_CLAIM_PREFIX)) {
+      if (
+        current?.razorpayOrderId &&
+        !current.razorpayOrderId.startsWith(ORDER_CREATE_CLAIM_PREFIX) &&
+        current.status === "PENDING"
+      ) {
         return {
           ok: true,
           data: {
@@ -157,6 +187,9 @@ export async function createPaymentOrder(
             keyId: process.env.RAZORPAY_KEY_ID ?? "",
           },
         };
+      }
+      if (current && current.status !== "PENDING") {
+        return { ok: false, error: "This job is not payable.", code: "SERVER_ERROR" };
       }
       return { ok: false, error: "Failed to persist payment order. Please retry.", code: "SERVER_ERROR" };
     }
@@ -256,13 +289,26 @@ export async function issueRefund(
 
   const payment = await prisma.payment.findUnique({ where: { jobId } });
   if (!payment) return { ok: false, error: "Payment record not found.", code: "SERVER_ERROR" };
+  const staleBefore = new Date(Date.now() - CLAIM_STALE_MS);
 
   if (payment.status === "REFUNDED" && payment.razorpayRefundId && !payment.razorpayRefundId.startsWith(REFUND_CLAIM_PREFIX)) {
     return { ok: true, data: { refundId: payment.razorpayRefundId } };
   }
 
   if (payment.razorpayRefundId?.startsWith(REFUND_CLAIM_PREFIX)) {
-    return { ok: false, error: "Refund is already in progress. Please retry later.", code: "SERVER_ERROR" };
+    if (payment.updatedAt <= staleBefore) {
+      await prisma.payment.updateMany({
+        where: {
+          jobId,
+          status: "SUCCESS",
+          razorpayRefundId: payment.razorpayRefundId,
+          updatedAt: { lte: staleBefore },
+        },
+        data: { razorpayRefundId: null },
+      });
+    } else {
+      return { ok: false, error: "Refund is already in progress. Please retry later.", code: "SERVER_ERROR" };
+    }
   }
 
   if (payment.status !== "SUCCESS") {

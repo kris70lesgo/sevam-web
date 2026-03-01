@@ -65,36 +65,57 @@ export async function createReview(
   if (!job.workerId)                     return { ok: false, error: "No worker assigned to this job.", code: "SERVER_ERROR" };
 
   try {
-    const review = await prisma.$transaction(async (tx) => {
-      // Create the review
-      const created = await tx.jobReview.create({
-        data: {
-          jobId,
-          customerId: session.userId,
-          workerId:   job.workerId!,
-          rating,
-          comment:    comment ?? null,
-        },
-      });
+    const workerId = job.workerId;
+    let reviewId: string | null = null;
 
-      // Recalculate worker's aggregate rating from all their reviews
-      const agg = await tx.jobReview.aggregate({
-        where:   { workerId: job.workerId! },
-        _avg:    { rating: true },
-        _count:  { rating: true },
-      });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const review = await prisma.$transaction(async (tx) => {
+          const created = await tx.jobReview.create({
+            data: {
+              jobId,
+              customerId: session.userId,
+              workerId,
+              rating,
+              comment: comment ?? null,
+            },
+          });
 
-      await tx.workerProfile.update({
-        where: { id: job.workerId! },
-        data: {
-          rating: agg._avg.rating ?? 0,
-        },
-      });
+          const agg = await tx.jobReview.aggregate({
+            where: { workerId },
+            _avg: { rating: true },
+            _count: { rating: true },
+          });
 
-      return created;
-    });
+          await tx.workerProfile.update({
+            where: { id: workerId },
+            data: { rating: agg._avg.rating ?? 0 },
+          });
 
-    return { ok: true, data: { reviewId: review.id } };
+          return created;
+        }, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+
+        reviewId = review.id;
+        break;
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2034" &&
+          attempt < 2
+        ) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!reviewId) {
+      return { ok: false, error: "Failed to submit review. Please try again.", code: "SERVER_ERROR" };
+    }
+
+    return { ok: true, data: { reviewId } };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return { ok: false, error: "You have already reviewed this job.", code: "SERVER_ERROR" };

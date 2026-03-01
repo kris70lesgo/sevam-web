@@ -103,7 +103,10 @@ export function useOfflineQueue<TInput>({
 
     try {
       const queue = readQueue();
-      if (queue.length === 0) return;
+      if (queue.length === 0) {
+        flushingRef.current = false;
+        return;
+      }
 
       const remaining: typeof queue = [];
 

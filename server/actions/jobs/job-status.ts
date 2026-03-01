@@ -330,7 +330,10 @@ export async function cancelJob(
       title: push.title,
       body:  push.body,
       data:  { jobId },
-    }).catch(() => null);
+    }).catch((err) => {
+      captureError(err, { action: "cancelJob:sendPushNotification", jobId, extra: { token: push.token } });
+      return null;
+    });
   }
 
   return { ok: true, data: { penaltyApplied } };

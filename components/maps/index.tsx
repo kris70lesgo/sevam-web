@@ -19,9 +19,8 @@
  */
 
 import dynamic from "next/dynamic";
-import type { ComponentProps } from "react";
-import type { JobMap } from "./JobMap";
-import type { TrackingMap } from "./TrackingMap";
+import type { JobMapProps } from "./JobMap";
+import type { TrackingMapProps } from "./TrackingMap";
 
 // ── Shared skeleton ──────────────────────────────────────────────────────────
 export function MapSkeleton({ height = 240 }: { height?: number }) {
@@ -38,7 +37,7 @@ export function MapSkeleton({ height = 240 }: { height?: number }) {
 }
 
 // ── JobMap ───────────────────────────────────────────────────────────────────
-export const LazyJobMap = dynamic<ComponentProps<typeof JobMap>>(
+export const LazyJobMap = dynamic<JobMapProps>(
   () => import("./JobMap").then((m) => m.JobMap),
   {
     ssr:     false,
@@ -47,7 +46,7 @@ export const LazyJobMap = dynamic<ComponentProps<typeof JobMap>>(
 );
 
 // ── TrackingMap ──────────────────────────────────────────────────────────────
-export const LazyTrackingMap = dynamic<ComponentProps<typeof TrackingMap>>(
+export const LazyTrackingMap = dynamic<TrackingMapProps>(
   () => import("./TrackingMap").then((m) => m.TrackingMap),
   {
     ssr:     false,
