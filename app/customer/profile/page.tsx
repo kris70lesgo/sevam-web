@@ -1,291 +1,418 @@
 'use client';
- 
+
 import {
-  Heart, Wallet, Gift, MapPin, Star, Tag,
-  HelpCircle, Bell, Shield, FileText, LogOut,
-  ChevronRight, BadgeCheck, User, Package,
-  CreditCard, Settings, MessageCircle
+  User, MapPin, CreditCard, Shield, LogOut, Edit,
+  Share2, HelpCircle, Home, Briefcase, MapPinned,
+  Plus, Trash2, Eye, EyeOff, Lock, Smartphone,
+  Check, ChevronRight
 } from 'lucide-react';
 import { useState } from 'react';
- 
+
 export default function ProfilePage() {
-  const [activeSection, setActiveSection] = useState('account');
- 
+  const [activeTab, setActiveTab] = useState('personal-info');
+  const [showPassword, setShowPassword] = useState(false);
+  const [twoFactor, setTwoFactor] = useState(true);
+
   const user = {
-    name: 'Priya Sharma',
-    email: 'priya.sharma@email.com',
+    name: 'Nikhil Sharma',
+    email: 'nikhil.sharma@gmail.com',
     phone: '+91 98765 43210',
+    dob: '14 August 1995',
+    gender: 'Male',
     verified: true,
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-    memberSince: 'March 2024',
+    memberSince: 'Jan 2024',
+    referralCode: 'NIKHIL40',
+    initials: 'N',
   };
- 
-  const stats = [
-    { label: 'Total Bookings', value: '24', icon: Package, iconColor: '#2563EB', bg: '#EFF6FF' },
-    { label: 'Wallet Balance', value: '₹450', icon: Wallet, iconColor: '#16A34A', bg: '#F0FDF4' },
-    { label: 'Saved Addresses', value: '3', icon: MapPin, iconColor: '#F97316', bg: '#FFF7ED' },
-    { label: 'Reward Points', value: '1,240', icon: Star, iconColor: '#D97706', bg: '#FFFBEB' },
+
+  const addresses = [
+    { id: 1, type: 'Home', icon: Home, address: 'A-204, Skyline Apartments, Koramangala, 4th Block', city: 'Bengaluru - 560034', isDefault: true },
+    { id: 2, type: 'Office', icon: Briefcase, address: 'WeWork Galaxy, Level 8, Residency Road', city: 'Bengaluru - 560025', isDefault: false },
+    { id: 3, type: 'Other', icon: MapPinned, address: 'Brigade Gateway, Flat 5C, Rajajinagar', city: 'Bengaluru - 560010', isDefault: false },
   ];
- 
-  const sidebarSections = [
-    { id: 'account', label: 'Account Settings', icon: User },
-    { id: 'orders', label: 'My Bookings', icon: Package },
-    { id: 'payments', label: 'Payment Methods', icon: CreditCard },
-    { id: 'addresses', label: 'Manage Addresses', icon: MapPin },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+
+  const paymentMethods = [
+    { id: 1, type: 'Google Pay', details: 'nikhil@oksbi', emoji: '🔵', color: '#3B82F6', isDefault: true },
+    { id: 2, type: 'HDFC Visa •••• 4289', details: 'Expires 08/27', emoji: '💳', color: '#8B5CF6', isDefault: false },
   ];
- 
-  const accountMenuItems = [
-    { id: 'profile', label: 'Edit Profile', description: 'Change your name, email and phone number', icon: User },
-    { id: 'addresses', label: 'Manage Addresses', description: 'Edit, add or remove addresses', icon: MapPin },
-    { id: 'wallet', label: 'Sevam Wallet', description: 'View balance and transaction history', icon: Wallet },
-    { id: 'favorites', label: 'Saved Services', description: 'View and manage your favorite services', icon: Heart },
-    { id: 'reviews', label: 'My Reviews & Ratings', description: 'See all your reviews and ratings', icon: Star },
-    { id: 'coupons', label: 'Coupons & Offers', description: 'View available coupons and offers', icon: Tag },
-    { id: 'refer', label: 'Refer & Earn', description: 'Invite friends and earn rewards', icon: Gift },
+
+  const menuItems = [
+    { id: 'personal-info', label: 'Personal Info', icon: User },
+    { id: 'saved-addresses', label: 'Saved Addresses', icon: MapPin },
+    { id: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
+    { id: 'security', label: 'Security', icon: Shield },
   ];
- 
-  const supportMenuItems = [
-    { id: 'help', label: 'Help Center', description: 'Get help with your bookings', icon: HelpCircle },
-    { id: 'support', label: 'Contact Support', description: '24/7 customer support', icon: MessageCircle },
-    { id: 'settings', label: 'Settings', description: 'Manage your preferences', icon: Settings },
-  ];
- 
-  const legalMenuItems = [
-    { id: 'privacy', label: 'Privacy Policy', icon: Shield },
-    { id: 'terms', label: 'Terms & Conditions', icon: FileText },
-  ];
- 
-  const placeholderIcons: Record<string, React.ElementType> = {
-    orders: Package, payments: CreditCard, addresses: MapPin, notifications: Bell,
+
+  const S = {
+    sectionHeader: { padding: '20px 28px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' } as React.CSSProperties,
+    sectionIcon: { width: 40, height: 40, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } as React.CSSProperties,
+    label: { fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6, display: 'block' },
+    value: { fontSize: 15, fontWeight: 500, color: '#0F172A' },
+    btnPrimary: { display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: '#F97316', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+    btnOutline: { display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: '#FFF7ED', color: '#F97316', border: '1px solid #FED7AA', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+    input: { width: '100%', padding: '12px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', outline: 'none', boxSizing: 'border-box' as const },
   };
- 
+
   return (
-    <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
-      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '32px 32px' }}>
- 
-        {/* Page title */}
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>My Account</h1>
-          <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your profile and preferences</p>
+    <div style={{ minHeight: '100vh', background: '#F1F5F9' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px' }}>
+
+        {/* Page header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>My Account</h1>
+            <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your profile, addresses, and preferences</p>
+          </div>
+          <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#EF4444' }}>
+            <LogOut style={{ width: 15, height: 15 }} /> Sign Out
+          </button>
         </div>
- 
-        {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
-          {stats.map(stat => {
-            const Icon = stat.icon;
-            return (
-              <div key={stat.label}
-                style={{ background: '#ffffff', border: '1px solid #E8ECF0', borderRadius: 12, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', transition: 'box-shadow 0.15s' }}
-                onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.07)')}
-                onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)')}
-              >
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                  <Icon style={{ width: 18, height: 18, color: stat.iconColor }} />
-                </div>
-                <p style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 3 }}>{stat.value}</p>
-                <p style={{ fontSize: 12, color: '#94A3B8' }}>{stat.label}</p>
-              </div>
-            );
-          })}
-        </div>
- 
-        {/* 2-col layout */}
+
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
- 
+
           {/* LEFT SIDEBAR */}
-          <div style={{ width: 240, flexShrink: 0, background: '#ffffff', border: '1px solid #E8ECF0', borderRadius: 12, overflow: 'hidden', position: 'sticky', top: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
- 
-            {/* User info */}
-            <div style={{ padding: '20px 20px', borderBottom: '1px solid #F1F5F9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <img src={user.image} alt={user.name}
-                    style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
-                  {user.verified && (
-                    <div style={{ position: 'absolute', bottom: -1, right: -1, width: 14, height: 14, borderRadius: '50%', background: '#22C55E', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <BadgeCheck style={{ width: 8, height: 8, color: '#fff' }} />
-                    </div>
-                  )}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{user.name}</p>
-                  <p style={{ fontSize: 11, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{user.email}</p>
+          <div style={{ width: 256, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Profile card */}
+            <div style={{ background: 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)', borderRadius: 18, padding: '24px 20px', color: '#fff', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+              <div style={{ position: 'relative', marginBottom: 16 }}>
+                <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  <span style={{ fontSize: 26, fontWeight: 800, color: '#1A3C6E' }}>{user.initials}</span>
+                  <div style={{ position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: '50%', background: '#F97316', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Check style={{ width: 10, height: 10, color: '#fff' }} />
+                  </div>
                 </div>
               </div>
-              <p style={{ fontSize: 11, color: '#CBD5E1' }}>Member since {user.memberSince}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <p style={{ fontSize: 15, fontWeight: 700 }}>{user.name}</p>
+                <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Check style={{ width: 9, height: 9, color: '#fff' }} />
+                </div>
+              </div>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>{user.email}</p>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Member since {user.memberSince}</p>
             </div>
- 
-            {/* Nav */}
-            <nav style={{ padding: '8px' }}>
-              {sidebarSections.map(section => {
-                const Icon = section.icon;
-                const active = activeSection === section.id;
+
+            {/* Nav menu */}
+            <div style={{ background: '#ffffff', borderRadius: 14, overflow: 'hidden', padding: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+              {menuItems.map(item => {
+                const Icon = item.icon;
+                const active = activeTab === item.id;
                 return (
-                  <button key={section.id} onClick={() => setActiveSection(section.id)}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2, transition: 'all 0.15s', background: active ? '#FFF7ED' : 'transparent', color: active ? '#F97316' : '#64748B' }}
+                  <button key={item.id} onClick={() => setActiveTab(item.id)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? '#FFF7ED' : 'transparent', color: active ? '#F97316' : '#64748B', marginBottom: 2, transition: 'all 0.15s' }}
                     onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = '#F8FAFC'; }}
                     onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                   >
-                    <Icon style={{ width: 15, height: 15 }} />
-                    <span style={{ fontSize: 13, fontWeight: active ? 600 : 400 }}>{section.label}</span>
+                    <Icon style={{ width: 16, height: 16 }} />
+                    <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, flex: 1, textAlign: 'left' as const }}>{item.label}</span>
+                    {active && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#F97316' }} />}
                   </button>
                 );
               })}
-            </nav>
- 
-            {/* Logout */}
-            <div style={{ padding: '8px', borderTop: '1px solid #F1F5F9' }}>
-              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent', color: '#EF4444', transition: 'background 0.15s' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#FEF2F2')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <LogOut style={{ width: 15, height: 15 }} />
-                <span style={{ fontSize: 13, fontWeight: 500 }}>Logout</span>
-              </button>
+            </div>
+
+            {/* Help card */}
+            <div style={{ background: 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)', borderRadius: 18, padding: '24px 20px', textAlign: 'center', color: '#fff' }}>
+              <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <HelpCircle style={{ width: 22, height: 22, color: '#fff' }} />
+              </div>
+              <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Need help?</p>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>Our support team is available 24/7</p>
+              <button style={{ width: '100%', padding: '11px 0', background: '#F97316', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#EA580C')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#F97316')}
+              >Contact Support</button>
             </div>
           </div>
- 
+
           {/* RIGHT CONTENT */}
-          <div style={{ flex: 1, background: '#ffffff', border: '1px solid #E8ECF0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
- 
-            {activeSection === 'account' && (
+          <div style={{ flex: 1, background: '#ffffff', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+
+            {/* ── PERSONAL INFO ── */}
+            {activeTab === 'personal-info' && (
               <>
-                {/* Section header */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #F1F5F9' }}>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 3 }}>Account Information</h2>
-                  <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your account settings and preferences</p>
-                </div>
- 
-                {/* Personal info */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #F1F5F9' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={S.sectionHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={S.sectionIcon}><User style={{ width: 20, height: 20, color: '#F97316' }} /></div>
                     <div>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 2 }}>Personal Information</p>
-                      <p style={{ fontSize: 12, color: '#94A3B8' }}>Update your personal details</p>
+                      <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Personal Information</p>
+                      <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your name, contact details and bio</p>
                     </div>
-                    <button style={{ fontSize: 13, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#EA580C')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#F97316')}
-                    >Edit</button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <button style={S.btnOutline}><Edit style={{ width: 14, height: 14 }} /> Edit</button>
+                </div>
+
+                <div style={{ padding: '28px 28px', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px 40px' }}>
                     <div>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>Full Name</p>
-                      <p style={{ fontSize: 14, color: '#0F172A' }}>{user.name}</p>
+                      <span style={S.label}>Full Name</span>
+                      <p style={S.value}>{user.name}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>Phone Number</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <p style={{ fontSize: 14, color: '#0F172A' }}>{user.phone}</p>
-                        {user.verified && (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#16A34A' }}>
-                            <BadgeCheck style={{ width: 12, height: 12 }} /> Verified
-                          </span>
-                        )}
-                      </div>
+                      <span style={S.label}>Phone Number</span>
+                      <p style={S.value}>{user.phone}</p>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.07em', marginBottom: 5 }}>Email Address</p>
-                      <p style={{ fontSize: 14, color: '#0F172A' }}>{user.email}</p>
+                      <span style={S.label}>Email Address</span>
+                      <p style={{ ...S.value, color: '#2563EB' }}>{user.email}</p>
+                    </div>
+                    <div>
+                      <span style={S.label}>Date of Birth</span>
+                      <p style={S.value}>{user.dob}</p>
+                    </div>
+                    <div>
+                      <span style={S.label}>Gender</span>
+                      <p style={{ ...S.value, color: '#2563EB' }}>{user.gender}</p>
                     </div>
                   </div>
                 </div>
- 
-                {/* Account options */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #F1F5F9' }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 12 }}>Account Options</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {accountMenuItems.map(item => {
-                      const Icon = item.icon;
-                      return (
-                        <button key={item.id}
-                          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, border: 'none', background: 'transparent', cursor: 'pointer', transition: 'background 0.15s', width: '100%' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}>
-                            <Icon style={{ width: 17, height: 17, color: '#64748B' }} />
-                          </div>
-                          <div style={{ flex: 1, textAlign: 'left' }}>
-                            <p style={{ fontSize: 14, fontWeight: 500, color: '#0F172A', marginBottom: 2 }}>{item.label}</p>
-                            <p style={{ fontSize: 12, color: '#94A3B8' }}>{item.description}</p>
-                          </div>
-                          <ChevronRight style={{ width: 16, height: 16, color: '#CBD5E1', flexShrink: 0 }} />
-                        </button>
-                      );
-                    })}
+
+                {/* Referral card */}
+                <div style={{ padding: '20px 28px' }}>
+                  <div style={{ background: 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)', borderRadius: 16, padding: '22px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                        <Share2 style={{ width: 14, height: 14, color: '#F97316' }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>Referral Code</span>
+                      </div>
+                      <p style={{ fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, letterSpacing: '0.02em' }}>{user.referralCode}</p>
+                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Share & earn ₹100 per successful referral</p>
+                    </div>
+                    <button style={{ padding: '12px 24px', background: '#F97316', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#EA580C')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '#F97316')}
+                    >Share Now</button>
                   </div>
-                </div>
- 
-                {/* Support */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #F1F5F9' }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 12 }}>Support & Help</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {supportMenuItems.map(item => {
-                      const Icon = item.icon;
-                      return (
-                        <button key={item.id}
-                          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, border: 'none', background: 'transparent', cursor: 'pointer', transition: 'background 0.15s', width: '100%' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Icon style={{ width: 17, height: 17, color: '#64748B' }} />
-                          </div>
-                          <div style={{ flex: 1, textAlign: 'left' }}>
-                            <p style={{ fontSize: 14, fontWeight: 500, color: '#0F172A', marginBottom: 2 }}>{item.label}</p>
-                            <p style={{ fontSize: 12, color: '#94A3B8' }}>{item.description}</p>
-                          </div>
-                          <ChevronRight style={{ width: 16, height: 16, color: '#CBD5E1', flexShrink: 0 }} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
- 
-                {/* Legal */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #F1F5F9' }}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginBottom: 12 }}>Legal</p>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
-                    {legalMenuItems.map(item => {
-                      const Icon = item.icon;
-                      return (
-                        <button key={item.id}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, border: '1px solid #E8ECF0', background: '#ffffff', fontSize: 13, color: '#64748B', cursor: 'pointer', transition: 'background 0.15s' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
-                          onMouseLeave={e => (e.currentTarget.style.background = '#ffffff')}
-                        >
-                          <Icon style={{ width: 14, height: 14 }} />
-                          {item.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
- 
-                {/* Footer */}
-                <div style={{ padding: '14px 24px', background: '#F8FAFC', textAlign: 'center' }}>
-                  <p style={{ fontSize: 12, color: '#CBD5E1' }}>Sevam v1.0.0 • Made with ❤️ in India</p>
                 </div>
               </>
             )}
- 
-            {/* Placeholder for other sections */}
-            {activeSection !== 'account' && (() => {
-              const PlaceholderIcon = placeholderIcons[activeSection];
-              const section = sidebarSections.find(s => s.id === activeSection);
-              return (
-                <div style={{ padding: '80px 24px', textAlign: 'center' }}>
-                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                    {PlaceholderIcon && <PlaceholderIcon style={{ width: 28, height: 28, color: '#94A3B8' }} />}
+
+            {/* ── SAVED ADDRESSES ── */}
+            {activeTab === 'saved-addresses' && (
+              <>
+                <div style={S.sectionHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={S.sectionIcon}><MapPin style={{ width: 20, height: 20, color: '#F97316' }} /></div>
+                    <div>
+                      <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Saved Addresses</p>
+                      <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your delivery and service locations</p>
+                    </div>
                   </div>
-                  <p style={{ fontSize: 16, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>{section?.label}</p>
-                  <p style={{ fontSize: 13, color: '#94A3B8' }}>This section is under development</p>
+                  <button style={S.btnPrimary}><Plus style={{ width: 14, height: 14 }} /> Add Address</button>
                 </div>
-              );
-            })()}
- 
+
+                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {addresses.map(addr => {
+                    const Icon = addr.icon;
+                    return (
+                      <div key={addr.id}
+                        style={{ border: '1.5px solid #F1F5F9', borderRadius: 14, padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: 16, transition: 'all 0.15s' }}
+                        onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FED7AA'); (e.currentTarget.style.background = '#FFFBF7'); }}
+                        onMouseLeave={e => { (e.currentTarget.style.borderColor = '#F1F5F9'); (e.currentTarget.style.background = '#fff'); }}
+                      >
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Icon style={{ width: 18, height: 18, color: '#F97316' }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{addr.type}</p>
+                            {addr.isDefault && (
+                              <span style={{ background: '#FFF7ED', color: '#F97316', border: '1px solid #FED7AA', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>Default</span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: 13, color: '#374151', marginBottom: 2 }}>{addr.address}</p>
+                          <p style={{ fontSize: 12, color: '#94A3B8' }}>{addr.city}</p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          {!addr.isDefault && (
+                            <button style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}>Set Default</button>
+                          )}
+                          <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Edit style={{ width: 14, height: 14, color: '#94A3B8' }} />
+                          </button>
+                          <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Trash2 style={{ width: 14, height: 14, color: '#94A3B8' }} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Add new */}
+                  <button style={{ width: '100%', border: '2px dashed #E2E8F0', borderRadius: 14, padding: '20px', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#94A3B8', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FDBA74'); (e.currentTarget.style.color = '#F97316'); }}
+                    onMouseLeave={e => { (e.currentTarget.style.borderColor = '#E2E8F0'); (e.currentTarget.style.color = '#94A3B8'); }}
+                  >
+                    <Plus style={{ width: 16, height: 16 }} /> Add a New Address
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── PAYMENT METHODS ── */}
+            {activeTab === 'payment-methods' && (
+              <>
+                <div style={S.sectionHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={S.sectionIcon}><CreditCard style={{ width: 20, height: 20, color: '#F97316' }} /></div>
+                    <div>
+                      <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Payment Methods</p>
+                      <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your UPI, cards and Sevam wallet</p>
+                    </div>
+                  </div>
+                  <button style={S.btnPrimary}><Plus style={{ width: 14, height: 14 }} /> Add Method</button>
+                </div>
+
+                {/* Wallet */}
+                <div style={{ padding: '20px 28px', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)', borderRadius: 16, padding: '22px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 8 }}>SEVAM WALLET</p>
+                      <p style={{ fontSize: 36, fontWeight: 900, color: '#fff', marginBottom: 4 }}>₹340.00</p>
+                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>Last topped up: 15 Mar 2026</p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+                      <button style={{ padding: '10px 20px', background: '#fff', color: '#F97316', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Add Money</button>
+                      <button style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>History</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment list */}
+                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {paymentMethods.map(method => (
+                    <div key={method.id}
+                      style={{ border: '1.5px solid #F1F5F9', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, transition: 'all 0.15s' }}
+                      onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FED7AA'); (e.currentTarget.style.background = '#FFFBF7'); }}
+                      onMouseLeave={e => { (e.currentTarget.style.borderColor = '#F1F5F9'); (e.currentTarget.style.background = '#fff'); }}
+                    >
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: method.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                        {method.emoji}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{method.type}</p>
+                          {method.isDefault && (
+                            <span style={{ background: '#FFF7ED', color: '#F97316', border: '1px solid #FED7AA', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>Default</span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: 13, color: '#94A3B8' }}>{method.details}</p>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {!method.isDefault && (
+                          <button style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}>Set Default</button>
+                        )}
+                        <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Trash2 style={{ width: 14, height: 14, color: '#94A3B8' }} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button style={{ width: '100%', border: '2px dashed #E2E8F0', borderRadius: 14, padding: '20px', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#94A3B8', transition: 'all 0.15s' }}
+                    onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FDBA74'); (e.currentTarget.style.color = '#F97316'); }}
+                    onMouseLeave={e => { (e.currentTarget.style.borderColor = '#E2E8F0'); (e.currentTarget.style.color = '#94A3B8'); }}
+                  >
+                    <Plus style={{ width: 16, height: 16 }} /> Add Payment Method
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── SECURITY ── */}
+            {activeTab === 'security' && (
+              <>
+                <div style={{ ...S.sectionHeader, justifyContent: 'flex-start', gap: 14 }}>
+                  <div style={S.sectionIcon}><Shield style={{ width: 20, height: 20, color: '#F97316' }} /></div>
+                  <div>
+                    <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Security</p>
+                    <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your password and account access</p>
+                  </div>
+                </div>
+
+                {/* Change password */}
+                <div style={{ padding: '24px 28px', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Lock style={{ width: 16, height: 16, color: '#F97316' }} />
+                    </div>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Change Password</p>
+                  </div>
+
+                  <div style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div>
+                      <span style={S.label}>Current Password</span>
+                      <input type="password" defaultValue="••••••••" style={S.input}
+                        onFocus={e => (e.target.style.borderColor = '#F97316')}
+                        onBlur={e => (e.target.style.borderColor = '#E2E8F0')}
+                      />
+                    </div>
+                    <div>
+                      <span style={S.label}>New Password</span>
+                      <div style={{ position: 'relative' }}>
+                        <input type={showPassword ? 'text' : 'password'} defaultValue="••••••••"
+                          style={{ ...S.input, paddingRight: 44 }}
+                          onFocus={e => (e.target.style.borderColor = '#F97316')}
+                          onBlur={e => (e.target.style.borderColor = '#E2E8F0')}
+                        />
+                        <button onClick={() => setShowPassword(!showPassword)}
+                          style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                          {showPassword ? <EyeOff style={{ width: 18, height: 18 }} /> : <Eye style={{ width: 18, height: 18 }} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <span style={S.label}>Confirm New Password</span>
+                      <input type="password" defaultValue="••••••••" style={S.input}
+                        onFocus={e => (e.target.style.borderColor = '#F97316')}
+                        onBlur={e => (e.target.style.borderColor = '#E2E8F0')}
+                      />
+                    </div>
+                    <button style={{ ...S.btnPrimary, width: 'fit-content', padding: '12px 24px', fontSize: 14 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#EA580C')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '#F97316')}
+                    >Update Password</button>
+                  </div>
+                </div>
+
+                {/* 2FA */}
+                <div style={{ padding: '22px 28px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Two-Factor Authentication</p>
+                    <p style={{ fontSize: 13, color: '#94A3B8' }}>Add an extra layer of security to your account via OTP on login</p>
+                  </div>
+                  <button onClick={() => setTwoFactor(!twoFactor)}
+                    style={{ width: 48, height: 26, borderRadius: 13, background: twoFactor ? '#F97316' : '#E2E8F0', border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                    <span style={{ position: 'absolute', top: 3, left: twoFactor ? 25 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.15)' }} />
+                  </button>
+                </div>
+
+                {/* Active sessions */}
+                <div style={{ padding: '22px 28px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Smartphone style={{ width: 16, height: 16, color: '#F97316' }} />
+                    </div>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Active Sessions</p>
+                  </div>
+                  <div style={{ border: '1.5px solid #F1F5F9', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 10, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Smartphone style={{ width: 18, height: 18, color: '#16A34A' }} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Chrome on MacOS</p>
+                        <p style={{ fontSize: 12, color: '#94A3B8' }}>Bengaluru, IN · Active now</p>
+                      </div>
+                    </div>
+                    <span style={{ background: '#DCFCE7', color: '#16A34A', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>This device</span>
+                  </div>
+                </div>
+              </>
+            )}
+
           </div>
         </div>
       </div>
