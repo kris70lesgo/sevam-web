@@ -8,8 +8,7 @@ export default function Home() {
 
   return (
     <div
-      className="relative min-h-screen bg-[#21346e] overflow-hidden"
-      style={{ fontFamily: "Rubik, sans-serif" }}
+      className="relative min-h-screen bg-[#21346e] overflow-hidden font-[family-name:var(--font-pt-sans-narrow)]"
     >
       {/* Background Video */}
       <video
@@ -59,7 +58,7 @@ export default function Home() {
             </svg>
 
             {/* Button Text */}
-            <span className="relative z-20 flex items-center justify-center w-full h-full font-rubik font-bold">
+            <span className="relative z-20 flex items-center justify-center w-full h-full font-bold">
               GET STARTED
             </span>
           </a>

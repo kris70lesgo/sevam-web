@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, PT_Sans_Narrow } from "next/font/google";
 import { Suspense } from "react";
 import { StoreHydrator } from "@/components/StoreHydrator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -14,6 +14,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const ptSansNarrow = PT_Sans_Narrow({
+  variable: "--font-pt-sans-narrow",
+  subsets: ["latin"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -32,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${ptSansNarrow.variable} antialiased`}
       >
         <OfflineBanner />
         <StoreHydrator />

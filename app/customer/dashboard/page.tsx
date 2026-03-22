@@ -3,7 +3,6 @@
 import Image from 'next/image';
 import Navbar from '@/components/dashboardnavbar';
 import Footer from '@/components/Footer';
-import TrendingSection from '@/components/TrendingSection';
 
 const categories = [
   "AC Repair\nServices",
@@ -37,9 +36,167 @@ const mobileCategories = [
   { name: "Massage", span: "col-span-1" },
 ];
 
+type Product = {
+  name: string;
+  currentPrice: string;
+  originalPrice: string;
+  image: string;
+  deliveryTime: string;
+};
+
+const priceDropProducts: Product[] = [
+  {
+    name: "24 Mantra Low GI Flour",
+    currentPrice: "₹217",
+    originalPrice: "₹300",
+    image: "/homepage/services/clean.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Organic Tattva Brown Sugar",
+    currentPrice: "₹114",
+    originalPrice: "₹175",
+    image: "/homepage/services/makeup.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Virgin Coconut Oil",
+    currentPrice: "₹853",
+    originalPrice: "₹999",
+    image: "/homepage/services/electrician.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Organic Methi Seeds",
+    currentPrice: "₹26",
+    originalPrice: "₹30",
+    image: "/homepage/services/massage.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Floor & Surface Cleaner",
+    currentPrice: "₹113",
+    originalPrice: "₹265",
+    image: "/homepage/services/clean.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Sweet Karam Coffee Mix",
+    currentPrice: "₹160",
+    originalPrice: "₹186",
+    image: "/homepage/services/makeup.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "The Baker Banana Cake",
+    currentPrice: "₹251",
+    originalPrice: "₹357",
+    image: "/homepage/services/electrician.jpg",
+    deliveryTime: "8 MINS",
+  },
+];
+
+const priceDropAlertProducts: Product[] = [
+  {
+    name: "The Baker's Dozen Vanilla Cake",
+    currentPrice: "₹249",
+    originalPrice: "₹348",
+    image: "/homepage/services/massage.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Tata Simply Better Virgin Coconut Oil",
+    currentPrice: "₹479",
+    originalPrice: "₹549",
+    image: "/homepage/services/electrician.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "24 Mantra Low GI Flour",
+    currentPrice: "₹474",
+    originalPrice: "₹750",
+    image: "/homepage/services/clean.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Tata Sampann Meat Masala",
+    currentPrice: "₹64",
+    originalPrice: "₹97",
+    image: "/homepage/services/makeup.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "The Baker's Dozen Chocolate Brownie",
+    currentPrice: "₹133",
+    originalPrice: "₹158",
+    image: "/homepage/services/massage.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Organic Tattva Organic Maida",
+    currentPrice: "₹43",
+    originalPrice: "₹65",
+    image: "/homepage/services/clean.jpg",
+    deliveryTime: "8 MINS",
+  },
+  {
+    name: "Sweet Kai Coffee Spice Mix",
+    currentPrice: "₹76",
+    originalPrice: "₹92",
+    image: "/homepage/services/makeup.jpg",
+    deliveryTime: "8 MINS",
+  },
+];
+
+function ProductListingSection({ title, products }: { title: string; products: Product[] }) {
+  return (
+    <section className="mt-12">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-[26px] font-extrabold tracking-tight text-gray-900">{title}</h3>
+        <a href="#" className="text-[22px] font-bold text-[#2563eb] hover:text-[#1d4ed8] transition-colors">
+          See All ›
+        </a>
+      </div>
+
+      <div className="-mx-1 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-px-4">
+        <div className="flex min-w-max gap-3 px-1 pb-2">
+          {products.map((product, index) => (
+            <article
+              key={`${title}-${index}`}
+              className="w-[170px] rounded-2xl bg-white p-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)]"
+            >
+              <div className="relative mb-3 rounded-xl bg-gray-50 p-2">
+                <button
+                  type="button"
+                  aria-label="Add product"
+                  className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-[#2563eb] bg-white text-2xl font-bold leading-none text-[#2563eb] shadow-sm"
+                >
+                  +
+                </button>
+                <div className="relative h-[120px] w-full overflow-hidden rounded-lg">
+                  <Image src={product.image} alt={product.name} fill className="object-cover" />
+                </div>
+              </div>
+
+              <p className="text-[12px] font-extrabold tracking-wide text-gray-500">{product.deliveryTime}</p>
+              <h4 className="mt-1 text-[16px] font-semibold leading-5 text-gray-900 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                {product.name}
+              </h4>
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-[28px] font-extrabold text-gray-900 leading-none">{product.currentPrice}</span>
+                <span className="text-[22px] text-gray-400 line-through leading-none">{product.originalPrice}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white font-[family-name:var(--font-pt-sans-narrow)]">
       <Navbar />
       <main className="max-w-[1280px] mx-auto px-4 lg:px-12 py-4 md:py-8">
         {/* Desktop Content */}
@@ -109,6 +266,7 @@ export default function App() {
         </div>
 
         {/* Categories Grid */}
+        <h3 className="mb-4 text-[24px] font-extrabold tracking-tight text-gray-900">Services:</h3>
         <div className="grid grid-cols-10 gap-x-4 gap-y-8">
           {categories.map((cat, i) => (
             <div key={i} className="flex flex-col items-center cursor-pointer group">
@@ -144,8 +302,21 @@ export default function App() {
             ))}
           </div>
         </div>
+
+        <ProductListingSection title="Most booked services" products={priceDropProducts} />
+        <ProductListingSection title="Price Drop Alert!" products={priceDropAlertProducts} />
+
+        <section className="mt-12">
+          <Image
+            src="/homepage/refer.jpeg"
+            alt="Refer banner"
+            width={1600}
+            height={700}
+            className="w-full h-auto object-contain"
+            priority={false}
+          />
+        </section>
       </main>
-      <TrendingSection />
       <Footer />
     </div>
   );

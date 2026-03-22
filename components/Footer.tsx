@@ -15,7 +15,7 @@ export default function Footer() {
         </div>
 
         {/* Links Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mb-12">
           {/* Company */}
           <div>
             <h3 className="text-[20px] font-bold text-black mb-6">Company</h3>
@@ -29,22 +29,41 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* For customers */}
+          {/* Categories */}
           <div>
-            <h3 className="text-[20px] font-bold text-black mb-6">For customers</h3>
-            <ul className="space-y-4">
-              <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">UC reviews</a></li>
-              <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Categories near you</a></li>
-              <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Contact us</a></li>
-            </ul>
-          </div>
+            <div className="mb-6 flex items-center gap-4">
+              <h3 className="text-[20px] font-bold text-black">Categories</h3>
+              <a href="#" className="text-[20px] text-green-700 hover:text-green-800 transition-colors">see all</a>
+            </div>
 
-          {/* For professionals */}
-          <div>
-            <h3 className="text-[20px] font-bold text-black mb-6">For professionals</h3>
-            <ul className="space-y-4">
-              <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Register as a professional</a></li>
-            </ul>
+            <div className="grid grid-cols-2 gap-x-10">
+              <ul className="space-y-3">
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Vegetables & Fruits</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Cold Drinks & Juices</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Bakery & Biscuits</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Dry Fruits, Masala & Oil</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Paan Corner</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Pharma & Wellness</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Personal Care</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Magazines</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Electronics & Electricals</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Toys & Games</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Rakhi Gifts</a></li>
+              </ul>
+
+              <ul className="space-y-3">
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Dairy & Breakfast</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Instant & Frozen Food</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Sweet Tooth</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Sauces & Spreads</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Organic & Premium</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Cleaning Essentials</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Pet Care</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Kitchen & Dining</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Stationery Needs</a></li>
+                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Print Store</a></li>
+              </ul>
+            </div>
           </div>
 
           {/* Social links */}
