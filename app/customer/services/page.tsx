@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import {
   HardHat, Wrench, Sparkles, Settings, Zap, ChefHat,
-  Scissors, Search, ShoppingCart, Trash2, Plus, Minus,
+  Scissors, ShoppingCart, Trash2, Plus, Minus,
   X, Star, Clock, ChevronRight, LayoutGrid
 } from 'lucide-react';
+import Navbar from '@/components/dashboardnavbar';
  
 interface SubService {
   id: string;
@@ -128,7 +129,6 @@ const categories: Category[] = [
 export default function ServicesPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [search, setSearch] = useState('');
   const [popup, setPopup] = useState<{ service: SubService; categoryName: string } | null>(null);
  
   const sidebarItems = [
@@ -138,13 +138,9 @@ export default function ServicesPage() {
  
   const allServices = categories.flatMap(c => c.subcategories.map(s => ({ ...s, categoryName: c.name })));
   const currentCategory = categories.find(c => c.id === selectedCategory);
-  const baseServices = selectedCategory === 'all'
+  const currentServices = selectedCategory === 'all'
     ? allServices
     : (currentCategory?.subcategories.map(s => ({ ...s, categoryName: currentCategory.name })) ?? []);
-  const currentServices = baseServices.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.description.toLowerCase().includes(search.toLowerCase())
-  );
  
   const addToCart = (service: SubService, categoryName: string) => {
     setCart(prev => {
@@ -164,7 +160,9 @@ export default function ServicesPage() {
   const total = subtotal + (cart.length > 0 ? 50 : 0);
  
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: '#F5F7FA', position: 'relative' }}>
+    <div style={{ minHeight: '100vh', background: '#F5F7FA', position: 'relative' }}>
+      <Navbar />
+      <div style={{ maxWidth: 1200, margin: '0 auto', width: '100%', padding: '0 32px', display: 'flex' }}>
  
       {/* POPUP MODAL */}
       {popup && (
@@ -266,7 +264,7 @@ export default function ServicesPage() {
       )}
  
       {/* LEFT SIDEBAR */}
-      <aside style={{ width: 196, background: '#ffffff', borderRight: '1px solid #F1F5F9', position: 'sticky', top: 0, height: '100vh', overflow: 'auto', flexShrink: 0 }}>
+      <aside style={{ width: 196, background: '#ffffff', border: '1px solid #D1D5DB', borderRadius: 24, position: 'sticky', top: 102, maxHeight: 'calc(100vh - 118px)', overflow: 'auto', flexShrink: 0, alignSelf: 'flex-start' }}>
         <div style={{ padding: '16px 10px', overflow: 'hidden' }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: 10, paddingLeft: 8 }}>
             Categories
@@ -295,22 +293,14 @@ export default function ServicesPage() {
       </aside>
  
       {/* MAIN CONTENT */}
-      <main style={{ flex: 1, overflow: 'auto', padding: '28px 60px' }}>
+      <main style={{ flex: 1, overflow: 'auto', padding: '28px 32px', background: '#ffffff', borderRadius: 32, minHeight: '78vh' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ marginBottom: 24 }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A3C6E', marginBottom: 3 }}>
               {selectedCategory === 'all' ? 'All Services' : (currentCategory?.name + ' Services')}
             </h1>
             <p style={{ fontSize: 13, color: '#94A3B8' }}>{currentServices.length} services available</p>
-          </div>
-          <div style={{ position: 'relative', width: 280 }}>
-            <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: '#CBD5E1' }} />
-            <input type="text" placeholder="Search services..." value={search} onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%', paddingLeft: 36, paddingRight: 14, paddingTop: 10, paddingBottom: 10, borderRadius: 10, border: '1.5px solid #E2E8F0', background: '#fff', fontSize: 13, outline: 'none', boxSizing: 'border-box' as const }}
-              onFocus={e => (e.target.style.borderColor = '#F97316')}
-              onBlur={e => (e.target.style.borderColor = '#E2E8F0')}
-            />
           </div>
         </div>
  
@@ -321,46 +311,59 @@ export default function ServicesPage() {
             <p style={{ fontSize: 13, color: '#94A3B8' }}>Try a different search or category</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 220px))', gap: 22, justifyContent: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 22 }}>
             {currentServices.map(service => (
               <div key={service.id}
-                style={{ background: '#fff', borderRadius: 16, border: '1px solid #F1F5F9', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', width: 220 }}
+                style={{ cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', width: '100%' }}
                 onClick={() => setPopup({ service, categoryName: service.categoryName })}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 28px rgba(0,0,0,0.1)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
               >
                 {/* Image */}
-                <div style={{ position: 'relative', height: 148, overflow: 'hidden', background: '#F1F5F9' }}>
-                  <img src={service.image} alt={service.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.2) 0%, transparent 55%)' }} />
-                  {service.duration && (
-                    <span style={{ position: 'absolute', bottom: 8, left: 10, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 10, padding: '3px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <Clock style={{ width: 10, height: 10 }} />{service.duration}
-                    </span>
-                  )}
-                  {/* Add button */}
+                <div style={{ position: 'relative', aspectRatio: '4 / 3', overflow: 'visible' }}>
+                  <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#F1F5F9', borderRadius: 18 }}>
+                    <img src={service.image} alt={service.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.2) 0%, transparent 55%)' }} />
+                    {service.duration && (
+                      <span style={{ position: 'absolute', bottom: 8, left: 10, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 10, padding: '3px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <Clock style={{ width: 10, height: 10 }} />{service.duration}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Center Add button */}
                   <button
                     onClick={e => { e.stopPropagation(); addToCart(service, service.categoryName); }}
-                    style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: '50%', background: isInCart(service.id) ? '#1A3C6E' : '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'background 0.15s' }}
-                    onMouseEnter={e => { e.stopPropagation(); if (!isInCart(service.id)) (e.currentTarget as HTMLElement).style.background = '#F97316'; }}
-                    onMouseLeave={e => { e.stopPropagation(); if (!isInCart(service.id)) (e.currentTarget as HTMLElement).style.background = '#fff'; }}
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      bottom: -18,
+                      transform: 'translateX(-50%)',
+                      minWidth: 100,
+                      height: 36,
+                      padding: '0 16px',
+                      borderRadius: 12,
+                      border: '2px solid #93C5FD',
+                      background: '#fff',
+                      color: '#2563EB',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+                      fontSize: 14,
+                      fontWeight: 700
+                    }}
                   >
-                    <Plus style={{ width: 14, height: 14, color: isInCart(service.id) ? '#fff' : '#F97316' }} />
+                    {isInCart(service.id) ? `Added (${cartQty(service.id)})` : 'Add'}
                   </button>
                 </div>
  
                 {/* Info */}
-                <div style={{ padding: '13px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '30px 6px 0 6px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <p style={{ fontSize: 14, fontWeight: 700, color: '#1A3C6E', marginBottom: 3, lineHeight: 1.3 }}>{service.name}</p>
-                  <p style={{ fontSize: 11, color: '#94A3B8', lineHeight: 1.5, marginBottom: 8, flex: 1 }}>{service.description}</p>
-                  {service.rating && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 8 }}>
-                      <Star style={{ width: 11, height: 11, color: '#F59E0B', fill: '#F59E0B' }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#374151' }}>{service.rating}</span>
-                      <span style={{ fontSize: 11, color: '#CBD5E1' }}>({service.reviews})</span>
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
                     <span style={{ fontSize: 17, fontWeight: 800, color: '#F97316' }}>₹{service.price}</span>
                     {isInCart(service.id) && (
                       <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ECFDF5', padding: '2px 8px', borderRadius: 20 }}>Added ✓</span>
@@ -433,6 +436,7 @@ export default function ServicesPage() {
           </div>
         </aside>
       )}
+      </div>
     </div>
   );
 }

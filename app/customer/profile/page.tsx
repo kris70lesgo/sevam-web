@@ -6,23 +6,152 @@ import {
   Plus, Trash2, Eye, EyeOff, Lock, Smartphone,
   Check, ChevronRight
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Navbar from '@/components/dashboardnavbar';
+import { supabase } from '@/lib/db/supabase';
+
+const PROFILE_STORAGE_KEY = 'sevam_profile';
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('personal-info');
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactor, setTwoFactor] = useState(true);
+  const [profileOverride, setProfileOverride] = useState<{ name?: string; email?: string; phone?: string } | null>(null);
+  const [newPhone, setNewPhone] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [contactMsg, setContactMsg] = useState('');
+  const [contactErr, setContactErr] = useState('');
+  const [contactLoading, setContactLoading] = useState(false);
 
   const user = {
-    name: 'Nikhil Sharma',
-    email: 'nikhil.sharma@gmail.com',
-    phone: '+91 98765 43210',
+    name: profileOverride?.name || 'Customer',
+    email: profileOverride?.email || '',
+    phone: profileOverride?.phone || '',
     dob: '14 August 1995',
     gender: 'Male',
     verified: true,
     memberSince: 'Jan 2024',
     referralCode: 'NIKHIL40',
-    initials: 'N',
+    initials: (profileOverride?.name?.charAt(0) || 'C').toUpperCase(),
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as { name?: string; email?: string; phone?: string };
+      if (parsed && (parsed.name || parsed.email || parsed.phone)) {
+        setProfileOverride(parsed);
+      }
+    } catch {
+      localStorage.removeItem(PROFILE_STORAGE_KEY);
+    }
+  }, []);
+
+  const normalizePhone = (value: string) => {
+    const trimmed = value.replace(/\s+/g, '').trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('+')) return trimmed;
+    return `+91${trimmed.replace(/^0+/, '')}`;
+  };
+
+  const persistProfile = (next: { name?: string; email?: string; phone?: string }) => {
+    const merged = {
+      name: next.name ?? user.name,
+      email: next.email ?? user.email,
+      phone: next.phone ?? user.phone,
+    };
+    setProfileOverride(merged);
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(merged));
+  };
+
+  const handleSendPhoneOtp = async () => {
+    try {
+      setContactErr('');
+      setContactMsg('');
+      setContactLoading(true);
+      const normalized = normalizePhone(newPhone);
+      if (!normalized) {
+        setContactErr('Please enter a valid phone number.');
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({ phone: normalized });
+      if (error) {
+        setContactErr(error.message || 'Failed to send OTP.');
+        return;
+      }
+
+      setNewPhone(normalized);
+      setPhoneOtpSent(true);
+      setContactMsg('OTP sent to your phone. Enter OTP to verify.');
+    } catch {
+      setContactErr('Failed to send OTP.');
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    try {
+      setContactErr('');
+      setContactMsg('');
+      setContactLoading(true);
+
+      if (!phoneOtp.trim()) {
+        setContactErr('Please enter OTP.');
+        return;
+      }
+
+      const { error } = await supabase.auth.verifyOtp({
+        phone: newPhone,
+        token: phoneOtp.trim(),
+        type: 'phone_change',
+      });
+
+      if (error) {
+        setContactErr(error.message || 'Phone verification failed.');
+        return;
+      }
+
+      persistProfile({ phone: newPhone });
+      setPhoneOtpSent(false);
+      setPhoneOtp('');
+      setContactMsg('Phone number verified successfully.');
+    } catch {
+      setContactErr('Phone verification failed.');
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
+  const handleSendEmailVerification = async () => {
+    try {
+      setContactErr('');
+      setContactMsg('');
+      setContactLoading(true);
+
+      if (!newEmail.trim()) {
+        setContactErr('Please enter email address.');
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+      if (error) {
+        setContactErr(error.message || 'Failed to send verification email.');
+        return;
+      }
+
+      setContactMsg('Verification email sent. Please check your inbox to confirm.');
+      persistProfile({ email: newEmail.trim() });
+    } catch {
+      setContactErr('Failed to send verification email.');
+    } finally {
+      setContactLoading(false);
+    }
   };
 
   const addresses = [
@@ -55,6 +184,7 @@ export default function ProfilePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F1F5F9' }}>
+      <Navbar />
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px' }}>
 
         {/* Page header */}
@@ -152,11 +282,47 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <span style={S.label}>Phone Number</span>
-                      <p style={S.value}>{user.phone}</p>
+                      {user.phone ? (
+                        <p style={S.value}>{user.phone}</p>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            value={newPhone}
+                            onChange={(e) => setNewPhone(e.target.value)}
+                            placeholder="Add phone number"
+                            style={{ ...S.input, maxWidth: 230, padding: '9px 10px' }}
+                          />
+                          {!phoneOtpSent ? (
+                            <button style={S.btnOutline} onClick={handleSendPhoneOtp} disabled={contactLoading}>Verify</button>
+                          ) : (
+                            <>
+                              <input
+                                value={phoneOtp}
+                                onChange={(e) => setPhoneOtp(e.target.value)}
+                                placeholder="OTP"
+                                style={{ ...S.input, width: 90, padding: '9px 10px' }}
+                              />
+                              <button style={S.btnOutline} onClick={handleVerifyPhoneOtp} disabled={contactLoading}>Submit</button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <span style={S.label}>Email Address</span>
-                      <p style={{ ...S.value, color: '#2563EB' }}>{user.email}</p>
+                      {user.email ? (
+                        <p style={{ ...S.value, color: '#2563EB' }}>{user.email}</p>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            placeholder="Add email address"
+                            style={{ ...S.input, maxWidth: 320, padding: '9px 10px' }}
+                          />
+                          <button style={S.btnOutline} onClick={handleSendEmailVerification} disabled={contactLoading}>Verify</button>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <span style={S.label}>Date of Birth</span>
@@ -168,6 +334,13 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
+
+                {(contactMsg || contactErr) && (
+                  <div style={{ padding: '0 28px 12px' }}>
+                    {contactMsg && <p style={{ fontSize: 13, color: '#16A34A' }}>{contactMsg}</p>}
+                    {contactErr && <p style={{ fontSize: 13, color: '#EF4444' }}>{contactErr}</p>}
+                  </div>
+                )}
 
                 {/* Referral card */}
                 <div style={{ padding: '20px 28px' }}>

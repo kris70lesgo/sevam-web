@@ -2,6 +2,7 @@
  
 import { Phone, MapPin, Calendar, Star, Check, HelpCircle, Headphones, ChevronRight, Clock, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Navbar from '@/components/dashboardnavbar';
  
 export default function BookingsPage() {
   const [activeTab, setActiveTab] = useState<'active' | 'upcoming' | 'completed'>('active');
@@ -62,7 +63,9 @@ export default function BookingsPage() {
   ];
  
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', background: '#F5F7FA' }}>
+    <div style={{ minHeight: '100vh', background: '#F5F7FA' }}>
+      <Navbar />
+      <div style={{ display: 'flex' }}>
  
       {/* LEFT SIDEBAR */}
       <aside style={{ width: 220, background: '#ffffff', borderRight: '1px solid #E8ECF0', position: 'sticky', top: 0, height: '100vh', overflow: 'auto', flexShrink: 0 }}>
@@ -369,6 +372,7 @@ export default function BookingsPage() {
         </div>
       </aside>
  
+      </div>
     </div>
   );
 }

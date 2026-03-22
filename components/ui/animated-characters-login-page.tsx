@@ -1,11 +1,27 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, EyeOff, Mail, Sparkles, Phone } from "lucide-react";
+import { supabase } from "@/lib/db/supabase";
+
+const PROFILE_STORAGE_KEY = "sevam_profile";
+
+type AuthMode = "login" | "signup";
+
+interface LoginPageProps {
+  initialMode?: AuthMode;
+}
+
+type PersistedProfile = {
+  name: string;
+  email: string;
+  phone: string;
+};
 
 interface PupilProps {
   size?: number;
@@ -167,8 +183,9 @@ const EyeBall = ({
   );
 };
 
-function LoginPage() {
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+function LoginPage({ initialMode = "login" }: LoginPageProps) {
+  const router = useRouter();
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -193,6 +210,10 @@ function LoginPage() {
   const blackRef = useRef<HTMLDivElement>(null);
   const yellowRef = useRef<HTMLDivElement>(null);
   const orangeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setAuthMode(initialMode);
+  }, [initialMode]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -295,13 +316,74 @@ function LoginPage() {
   const yellowPos = calculatePosition(yellowRef);
   const orangePos = calculatePosition(orangeRef);
 
-  const handleGetOtp = (target: "login" | "signup") => {
+  const normalizePhone = (rawPhone: string) => {
+    const cleaned = rawPhone.replace(/\s+/g, "").trim();
+    if (!cleaned) return "";
+    if (cleaned.startsWith("+")) return cleaned;
+    return `+91${cleaned.replace(/^0+/, "")}`;
+  };
+
+  const persistProfile = (profile: PersistedProfile) => {
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  };
+
+  const syncProfileToBackend = async (profile: PersistedProfile, accessToken?: string) => {
+    if (!accessToken) return profile;
+
+    try {
+      const response = await fetch("/api/auth/sync-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(profile),
+      });
+
+      if (!response.ok) return profile;
+      const data = (await response.json()) as { profile?: PersistedProfile };
+      return data.profile ?? profile;
+    } catch {
+      return profile;
+    }
+  };
+
+  const resolveAccessToken = async (candidate?: string) => {
+    if (candidate) return candidate;
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token;
+  };
+
+  const handleGetOtp = async (target: "login" | "signup") => {
     if (!phone.trim()) {
       setError("Please enter phone number first.");
       return;
     }
 
     setError("");
+
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalizedPhone });
+
+      if (otpError) {
+        setError(otpError.message || "Failed to send OTP.");
+        return;
+      }
+
+      setPhone(normalizedPhone);
+    } catch {
+      setError("Failed to send OTP.");
+      return;
+    } finally {
+      setIsLoading(false);
+    }
 
     if (target === "login") {
       setIsPhoneOtpSent(true);
@@ -310,16 +392,36 @@ function LoginPage() {
     }
   };
 
+  const handleGoogleAuth = async () => {
+    try {
+      setError("");
+      setIsLoading(true);
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/customer/dashboard`,
+        },
+      });
+
+      if (oauthError) {
+        setError(oauthError.message || "Google auth failed.");
+      }
+    } catch {
+      setError("Google auth failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const normalizedPhone = normalizePhone(phone);
 
-    const loginId = loginMethod === "email" ? email : phone;
-
-    if (authMode === "signup") {
+    try {
+      if (authMode === "signup") {
       if (!fullName.trim()) {
         setError("Please enter your full name.");
         setIsLoading(false);
@@ -338,16 +440,65 @@ function LoginPage() {
           setIsLoading(false);
           return;
         }
+
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          phone: normalizedPhone,
+          token: signupPhoneOtp,
+          type: "sms",
+        });
+
+        if (verifyError || !data.user) {
+          setError(verifyError?.message || "OTP verification failed.");
+          setIsLoading(false);
+          return;
+        }
+
+          const fallbackProfile: PersistedProfile = {
+          name: fullName,
+          email: data.user.email ?? "",
+          phone: normalizedPhone,
+          };
+          const token = await resolveAccessToken(data.session?.access_token);
+          const syncedProfile = await syncProfileToBackend(fallbackProfile, token);
+          persistProfile(syncedProfile);
+        router.push("/customer/dashboard");
+        setIsLoading(false);
+        return;
       }
 
-      alert(`Signup successful! Welcome, ${fullName || "there"}!`);
-      setAuthMode("login");
-      setUseOtpForPhoneLogin(false);
-      setIsPhoneOtpSent(false);
-      setIsSignupOtpSent(false);
-      setPhoneOtp("");
-      setSignupPhoneOtp("");
-    } else if (loginMethod === "phone" && useOtpForPhoneLogin) {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone: normalizedPhone,
+          },
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message || "Signup failed.");
+        setIsLoading(false);
+        return;
+      }
+
+      const fallbackProfile: PersistedProfile = {
+        name: fullName,
+        email: data.user?.email ?? email,
+        phone: normalizedPhone,
+      };
+      const token = await resolveAccessToken(data.session?.access_token);
+      const syncedProfile = await syncProfileToBackend(fallbackProfile, token);
+      persistProfile(syncedProfile);
+      router.push("/customer/dashboard");
+    } else if (loginMethod === "phone") {
+      if (!useOtpForPhoneLogin) {
+        setError("Please use OTP for phone login.");
+        setIsLoading(false);
+        return;
+      }
+
       if (!isPhoneOtpSent) {
         setError("Please click Get OTP for phone login.");
         setIsLoading(false);
@@ -360,14 +511,51 @@ function LoginPage() {
         return;
       }
 
-      alert("Login successful with OTP!");
-    } else if (loginId && password) {
-      alert("Login successful! Welcome back!");
-    } else {
-      setError("Please enter valid credentials.");
-    }
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        phone: normalizedPhone,
+        token: phoneOtp,
+        type: "sms",
+      });
 
-    setIsLoading(false);
+      if (verifyError || !data.user) {
+        setError(verifyError?.message || "OTP verification failed.");
+        setIsLoading(false);
+        return;
+      }
+
+      const fallbackProfile: PersistedProfile = {
+        name: (data.user.user_metadata?.full_name as string | undefined) ?? "Customer",
+        email: data.user.email ?? "",
+        phone: normalizedPhone,
+      };
+      const token = await resolveAccessToken(data.session?.access_token);
+      const syncedProfile = await syncProfileToBackend(fallbackProfile, token);
+      persistProfile(syncedProfile);
+      router.push("/customer/dashboard");
+    } else {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (signInError || !data.user) {
+        setError(signInError?.message || "Login failed.");
+        setIsLoading(false);
+        return;
+      }
+
+      const fallbackProfile: PersistedProfile = {
+        name: (data.user.user_metadata?.full_name as string | undefined) ?? "Customer",
+        email: data.user.email ?? email,
+        phone: (data.user.phone as string | undefined) ?? normalizedPhone,
+      };
+      const token = await resolveAccessToken(data.session?.access_token);
+      const syncedProfile = await syncProfileToBackend(fallbackProfile, token);
+      persistProfile(syncedProfile);
+      router.push("/customer/dashboard");
+    }
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -821,9 +1009,15 @@ function LoginPage() {
           </form>
 
           <div className="mt-6">
-            <Button variant="outline" className="w-full h-12 !bg-[#020202] !border-[#1f2937] !text-[#f3f4f6] hover:!bg-[#0b0b0b]" type="button">
-              {loginMethod === "email" ? <Mail className="mr-2 size-5" /> : <Phone className="mr-2 size-5" />}
-              {loginMethod === "email" ? "Log in with Google" : "Continue with OTP"}
+            <Button
+              variant="outline"
+              className="w-full h-12 !bg-[#020202] !border-[#1f2937] !text-[#f3f4f6] hover:!bg-[#0b0b0b]"
+              type="button"
+              onClick={handleGoogleAuth}
+              disabled={isLoading}
+            >
+              <Mail className="mr-2 size-5" />
+              {authMode === "signup" ? "Sign up with Google" : "Log in with Google"}
             </Button>
           </div>
 
