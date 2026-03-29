@@ -88,6 +88,17 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      await prisma.customerProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          userId: user.id,
+          email: email || null,
+        },
+        update: {
+          email: email || null,
+        },
+      });
+
       return NextResponse.json({
         user,
         profile,

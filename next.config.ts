@@ -21,8 +21,10 @@ export default withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
 
-  // Hides source maps from the client bundle
-  hideSourceMaps: true,
+  // Upload source maps, then remove them from the final artifacts
+  sourcemaps: {
+    deleteSourcemapsAfterUpload: true,
+  },
 
   // Disable tree-shaking of Sentry logger statements in production
   disableLogger: true,

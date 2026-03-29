@@ -41,7 +41,7 @@ async function main() {
     FROM "Job" j
     WHERE NOT EXISTS (SELECT 1 FROM "User" u WHERE u.id = j."customerId")
   `;
-  if (orphanedJobs > 0n) {
+  if (orphanedJobs !== BigInt(0)) {
     errors.push(`❌ ${orphanedJobs} jobs with missing customer FK — database integrity issue`);
   }
 

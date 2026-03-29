@@ -1,17 +1,70 @@
+"use client";
+
+import { useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { Twitter, Facebook, Instagram, Linkedin, Apple, Play } from 'lucide-react';
+import type { ServiceCatalogApiResponse } from '@/types/service-catalog';
+
+const FALLBACK_CATEGORIES = [
+  'Labour',
+  'Plumbing',
+  'Cleaning',
+  'Repairing',
+  'Electrician',
+  'Chef / Cooking',
+  'Grooming',
+];
 
 export default function Footer() {
+  const [catalogCategories, setCatalogCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const response = await fetch('/api/services/catalog', { cache: 'force-cache' });
+        if (!response.ok) {
+          throw new Error('Catalog request failed');
+        }
+
+        const data = (await response.json()) as ServiceCatalogApiResponse;
+        if (!isMounted) return;
+
+        const names = (data.categories ?? []).map((category) => category.name).filter(Boolean);
+        if (names.length > 0) {
+          setCatalogCategories(names);
+        }
+      } catch {
+        // Keep fallback categories in case catalog is temporarily unavailable.
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const categoryColumns = useMemo(() => {
+    const source = catalogCategories.length > 0 ? catalogCategories : FALLBACK_CATEGORIES;
+    const midpoint = Math.ceil(source.length / 2);
+    return [source.slice(0, midpoint), source.slice(midpoint)];
+  }, [catalogCategories]);
+
   return (
     <footer className="bg-[#f5f5f5] pt-16 pb-8 px-4 lg:px-12 mt-12">
       <div className="max-w-[1280px] mx-auto">
         {/* Logo */}
         <div className="mb-12 flex items-center">
-          <div className="bg-black text-white font-bold text-xl p-2 rounded-md mr-3 leading-none">
-            UC
-          </div>
-          <div className="text-2xl font-bold leading-tight">
-            Urban<br />Company
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Sevam"
+            width={160}
+            height={52}
+            className="w-[120px] md:w-[160px] h-auto"
+          />
         </div>
 
         {/* Links Grid */}
@@ -33,35 +86,23 @@ export default function Footer() {
           <div>
             <div className="mb-6 flex items-center gap-4">
               <h3 className="text-[20px] font-bold text-black">Categories</h3>
-              <a href="#" className="text-[20px] text-green-700 hover:text-green-800 transition-colors">see all</a>
             </div>
 
             <div className="grid grid-cols-2 gap-x-10">
               <ul className="space-y-3">
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Vegetables & Fruits</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Cold Drinks & Juices</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Bakery & Biscuits</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Dry Fruits, Masala & Oil</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Paan Corner</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Pharma & Wellness</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Personal Care</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Magazines</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Electronics & Electricals</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Toys & Games</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Rakhi Gifts</a></li>
+                {categoryColumns[0].map((category) => (
+                  <li key={category}>
+                    <span className="text-[15px] text-gray-600">{category}</span>
+                  </li>
+                ))}
               </ul>
 
               <ul className="space-y-3">
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Dairy & Breakfast</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Instant & Frozen Food</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Sweet Tooth</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Sauces & Spreads</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Organic & Premium</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Cleaning Essentials</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Pet Care</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Kitchen & Dining</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Stationery Needs</a></li>
-                <li><a href="#" className="text-[15px] text-gray-600 hover:text-black transition-colors">Print Store</a></li>
+                {categoryColumns[1].map((category) => (
+                  <li key={category}>
+                    <span className="text-[15px] text-gray-600">{category}</span>
+                  </li>
+                ))}
               </ul>
             </div>
           </div>

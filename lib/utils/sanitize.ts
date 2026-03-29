@@ -19,14 +19,14 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import xss from "xss";
+import xss, { type IFilterXSSOptions } from "xss";
 
 /** Options that strip ALL HTML — only plain text allowed. */
-const PLAIN_TEXT_OPTIONS = {
+const PLAIN_TEXT_OPTIONS: IFilterXSSOptions = {
   whiteList: {},
   stripIgnoreTag: true,
   stripIgnoreTagBody: ["script", "style", "iframe", "object", "embed"],
-} as const;
+};
 
 /**
  * Sanitize any plain-text field (names, addresses, bio, etc.).

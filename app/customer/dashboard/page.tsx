@@ -1,6 +1,7 @@
 
 "use client"
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import Navbar from '@/components/dashboardnavbar';
 import Footer from '@/components/Footer';
@@ -31,6 +32,8 @@ const fallbackMobileCategories = [
 ];
 
 type Product = {
+  id: string;
+  categorySlug: string;
   name: string;
   currentPrice: string;
   originalPrice: string;
@@ -39,6 +42,8 @@ type Product = {
 };
 
 function toProductCard(service: {
+  id: string;
+  categorySlug: string;
   name: string;
   price: number;
   originalPrice: number | null;
@@ -46,6 +51,8 @@ function toProductCard(service: {
   deliveryTime: string | null;
 }): Product {
   return {
+    id: service.id,
+    categorySlug: service.categorySlug,
     name: service.name,
     currentPrice: `₹${Math.round(service.price)}`,
     originalPrice: `₹${Math.round(service.originalPrice ?? service.price * 1.3)}`,
@@ -54,14 +61,38 @@ function toProductCard(service: {
   };
 }
 
-function ProductListingSection({ title, products }: { title: string; products: Product[] }) {
+function renderPrice(price: string) {
+  const numericPart = price.replace(/^₹/, '');
+  return (
+    <>
+      <span className="font-sans">₹</span>
+      {numericPart}
+    </>
+  );
+}
+
+function ProductListingSection({
+  title,
+  products,
+  onOpenService,
+  onSeeAll,
+}: {
+  title: string;
+  products: Product[];
+  onOpenService: (product: Product) => void;
+  onSeeAll: () => void;
+}) {
   return (
     <section className="mt-12">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-[26px] font-extrabold tracking-tight text-gray-900">{title}</h3>
-        <a href="#" className="text-[22px] font-bold text-[#2563eb] hover:text-[#1d4ed8] transition-colors">
+        <button
+          type="button"
+          onClick={onSeeAll}
+          className="text-[22px] font-bold text-[#2563eb] hover:text-[#1d4ed8] transition-colors"
+        >
           See All ›
-        </a>
+        </button>
       </div>
 
       <div className="-mx-1 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-px-4">
@@ -69,12 +100,17 @@ function ProductListingSection({ title, products }: { title: string; products: P
           {products.map((product, index) => (
             <article
               key={`${title}-${index}`}
-              className="w-[170px] rounded-2xl bg-white p-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)]"
+              onClick={() => onOpenService(product)}
+              className="w-[170px] rounded-2xl bg-white p-3 shadow-[0_2px_10px_rgba(0,0,0,0.06)] cursor-pointer"
             >
               <div className="relative mb-3 rounded-xl bg-gray-50 p-2">
                 <button
                   type="button"
                   aria-label="Add product"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenService(product);
+                  }}
                   className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-[#2563eb] bg-white text-2xl font-bold leading-none text-[#2563eb] shadow-sm"
                 >
                   +
@@ -85,12 +121,12 @@ function ProductListingSection({ title, products }: { title: string; products: P
               </div>
 
               <p className="text-[12px] font-extrabold tracking-wide text-gray-500">{product.deliveryTime}</p>
-              <h4 className="mt-1 text-[16px] font-semibold leading-5 text-gray-900 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+              <h4 className="mt-1 text-[17px] font-semibold leading-5 text-gray-900 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
                 {product.name}
               </h4>
               <div className="mt-3 flex items-center gap-2">
-                <span className="text-[28px] font-extrabold text-gray-900 leading-none">{product.currentPrice}</span>
-                <span className="text-[22px] text-gray-400 line-through leading-none">{product.originalPrice}</span>
+                <span className="text-[14px] font-extrabold text-gray-900 leading-none">{renderPrice(product.currentPrice)}</span>
+                <span className="text-[14px] text-gray-400 line-through leading-none">{renderPrice(product.originalPrice)}</span>
               </div>
             </article>
           ))}
@@ -101,6 +137,7 @@ function ProductListingSection({ title, products }: { title: string; products: P
 }
 
 export default function App() {
+  const router = useRouter();
   const [catalog, setCatalog] = useState<ServiceCatalogApiResponse | null>(null);
 
   useEffect(() => {
@@ -157,7 +194,13 @@ export default function App() {
   }, [catalog]);
 
   const allServices = useMemo(
-    () => (catalog?.categories ?? []).flatMap((category) => category.services),
+    () =>
+      (catalog?.categories ?? []).flatMap((category) =>
+        category.services.map((service) => ({
+          ...service,
+          categorySlug: category.slug,
+        }))
+      ),
     [catalog]
   );
 
@@ -174,6 +217,16 @@ export default function App() {
   const renderServiceImages = serviceImages.length > 0
     ? serviceImages
     : ['/homepage/services/clean.jpg', '/homepage/services/electrician.jpg', '/homepage/services/makeup.jpg', '/homepage/services/massage.jpg'];
+
+  const handleOpenService = (product: Product) => {
+    router.push(
+      `/customer/services?serviceId=${encodeURIComponent(product.id)}&category=${encodeURIComponent(product.categorySlug)}`
+    );
+  };
+
+  const handleSeeAll = () => {
+    router.push('/customer/services');
+  };
 
   return (
     <div className="min-h-screen bg-white font-[family-name:var(--font-pt-sans-narrow)]">
@@ -249,7 +302,11 @@ export default function App() {
         <h3 className="mb-4 text-[24px] font-extrabold tracking-tight text-gray-900">Services:</h3>
         <div className="grid grid-cols-10 gap-x-4 gap-y-8">
           {categories.map((cat, i) => (
-            <div key={i} className="flex flex-col items-center cursor-pointer group">
+            <div
+              key={i}
+              className="flex flex-col items-center cursor-pointer group"
+              onClick={() => router.push('/customer/services')}
+            >
               <div className="w-full aspect-square rounded-2xl bg-[#f3f6f8] mb-3 group-hover:shadow-md transition-all duration-200 overflow-hidden relative">
                 <Image
                   src={renderServiceImages[i % renderServiceImages.length]}
@@ -271,7 +328,11 @@ export default function App() {
           <h2 className="text-[22px] font-extrabold text-gray-900 mb-4 tracking-tight">Browse by Category</h2>
           <div className="grid grid-cols-4 gap-3">
             {mobileCategories.map((cat, i) => (
-              <div key={i} className={`flex flex-col items-center cursor-pointer ${cat.span}`}>
+              <div
+                key={i}
+                className={`flex flex-col items-center cursor-pointer ${cat.span}`}
+                onClick={() => router.push('/customer/services')}
+              >
                 <div className="w-full h-[100px] bg-[#eef6f4] rounded-2xl mb-2 flex items-center justify-center overflow-hidden">
                   <div className="w-1/2 h-1/2 bg-[#d8e8e4] rounded-lg"></div>
                 </div>
@@ -284,10 +345,10 @@ export default function App() {
         </div>
 
         {priceDropProducts.length > 0 && (
-          <ProductListingSection title="Most booked services" products={priceDropProducts} />
+          <ProductListingSection title="Most booked services" products={priceDropProducts} onOpenService={handleOpenService} onSeeAll={handleSeeAll} />
         )}
         {priceDropAlertProducts.length > 0 && (
-          <ProductListingSection title="Price Drop Alert!" products={priceDropAlertProducts} />
+          <ProductListingSection title="Price Drop Alert!" products={priceDropAlertProducts} onOpenService={handleOpenService} onSeeAll={handleSeeAll} />
         )}
 
         <section className="mt-12">

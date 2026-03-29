@@ -4,7 +4,7 @@ import {
   User, MapPin, CreditCard, Shield, LogOut, Edit,
   Share2, HelpCircle, Home, Briefcase, MapPinned,
   Plus, Trash2, Eye, EyeOff, Lock, Smartphone,
-  Check, ChevronRight
+  Check, X, Heart, Package, Settings
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/dashboardnavbar';
@@ -35,6 +35,30 @@ type AddressesApiResponse = {
     pincode: string;
     isDefault: boolean;
   }>;
+};
+
+type AddressApiItem = AddressesApiResponse['addresses'][number];
+
+type OrdersApiResponse = {
+  orders: Array<{
+    id: string;
+    type: string;
+    description: string;
+    createdAt: string;
+    completedAt: string | null;
+    providerName: string;
+    totalPaid: string;
+  }>;
+};
+
+type PastOrderCard = {
+  id: string;
+  service: string;
+  provider: string;
+  item: string;
+  deliveredAt: string;
+  bookedAt: string;
+  totalPaid: string;
 };
 
 const FALLBACK_ADDRESSES: AddressCard[] = [
@@ -69,20 +93,57 @@ function cleanPhone(phone?: string) {
   return value.startsWith('oauth_') ? '' : value;
 }
 
+function formatOrderDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function mapJobTypeToLabel(type: string) {
+  const labels: Record<string, string> = {
+    PLUMBING: 'Plumbing Service',
+    ELECTRICAL: 'Electrical Service',
+    PAINTING: 'Painting Service',
+    CARPENTRY: 'Carpentry Service',
+    CLEANING: 'Home Cleaning',
+    AC_REPAIR: 'AC Repair',
+    APPLIANCE_REPAIR: 'Appliance Repair',
+    OTHER: 'Home Service',
+  };
+
+  return labels[type] ?? 'Home Service';
+}
+
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState('personal-info');
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactor, setTwoFactor] = useState(true);
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
   const [profileOverride, setProfileOverride] = useState<{ name?: string; email?: string; phone?: string } | null>(null);
   const [newPhone, setNewPhone] = useState('');
   const [phoneOtp, setPhoneOtp] = useState('');
   const [phoneOtpSent, setPhoneOtpSent] = useState(false);
   const [newEmail, setNewEmail] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [contactMsg, setContactMsg] = useState('');
   const [contactErr, setContactErr] = useState('');
   const [contactLoading, setContactLoading] = useState(false);
   const [addresses, setAddresses] = useState<AddressCard[]>(FALLBACK_ADDRESSES);
   const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressesMsg, setAddressesMsg] = useState('');
+  const [addressesErr, setAddressesErr] = useState('');
+  const [pastOrders, setPastOrders] = useState<PastOrderCard[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   const user = {
     name: profileOverride?.name || 'Customer',
@@ -92,8 +153,46 @@ export default function ProfilePage() {
     gender: 'Male',
     verified: true,
     memberSince: 'Jan 2024',
-    referralCode: 'NIKHIL40',
     initials: (profileOverride?.name?.charAt(0) || 'C').toUpperCase(),
+  };
+
+  const mapAddressToCard = (addr: AddressApiItem): AddressCard => {
+    const line2 = addr.line2?.trim() ? `, ${addr.line2.trim()}` : '';
+    const landmark = addr.landmark?.trim() ? `, ${addr.landmark.trim()}` : '';
+
+    return {
+      id: addr.id,
+      type: addr.label === 'HOME' ? 'Home' : addr.label === 'OFFICE' ? 'Office' : 'Other',
+      label: addr.label,
+      address: `${addr.line1}${line2}${landmark}`,
+      city: `${addr.city} - ${addr.pincode}`,
+      isDefault: addr.isDefault,
+    };
+  };
+
+  const getAccessToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? '';
+  };
+
+  const refreshAddresses = async (token: string) => {
+    const response = await fetch('/api/customer/addresses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to load addresses');
+    }
+
+    const payload = (await response.json()) as AddressesApiResponse;
+    const mapped = (payload.addresses ?? []).map(mapAddressToCard);
+    if (mapped.length > 0) {
+      setAddresses(mapped);
+    }
   };
 
   useEffect(() => {
@@ -120,17 +219,19 @@ export default function ProfilePage() {
     const loadProfileAndAddresses = async () => {
       try {
         setAddressesLoading(true);
+        setOrdersLoading(true);
         const { data } = await supabase.auth.getSession();
         const accessToken = data.session?.access_token;
 
         if (!accessToken) {
           if (isMounted) {
             setAddressesLoading(false);
+            setOrdersLoading(false);
           }
           return;
         }
 
-        const [profileResponse, addressesResponse] = await Promise.all([
+        const [profileResponse, addressesResponse, ordersResponse] = await Promise.all([
           fetch('/api/customer/profile', {
             method: 'GET',
             headers: {
@@ -139,6 +240,13 @@ export default function ProfilePage() {
             cache: 'no-store',
           }),
           fetch('/api/customer/addresses', {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+            cache: 'no-store',
+          }),
+          fetch('/api/customer/orders', {
             method: 'GET',
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -164,29 +272,41 @@ export default function ProfilePage() {
 
         if (isMounted && addressesResponse.ok) {
           const addressesData = (await addressesResponse.json()) as AddressesApiResponse;
-          const mappedAddresses: AddressCard[] = (addressesData.addresses ?? []).map((addr) => {
-            const line2 = addr.line2?.trim() ? `, ${addr.line2.trim()}` : '';
-            const landmark = addr.landmark?.trim() ? `, ${addr.landmark.trim()}` : '';
-
-            return {
-              id: addr.id,
-              type: addr.label === 'HOME' ? 'Home' : addr.label === 'OFFICE' ? 'Office' : 'Other',
-              label: addr.label,
-              address: `${addr.line1}${line2}${landmark}`,
-              city: `${addr.city} - ${addr.pincode}`,
-              isDefault: addr.isDefault,
-            };
-          });
+          const mappedAddresses: AddressCard[] = (addressesData.addresses ?? []).map(mapAddressToCard);
 
           if (mappedAddresses.length > 0) {
             setAddresses(mappedAddresses);
           }
         }
+
+        if (isMounted) {
+          if (ordersResponse.ok) {
+            const ordersData = (await ordersResponse.json()) as OrdersApiResponse;
+            const mappedOrders: PastOrderCard[] = (ordersData.orders ?? []).map((order) => ({
+              id: order.id,
+              service: mapJobTypeToLabel(order.type),
+              provider: order.providerName,
+              item: order.description,
+              deliveredAt: order.completedAt
+                ? `Delivered on ${formatOrderDate(order.completedAt)}`
+                : 'Completed',
+              bookedAt: formatOrderDate(order.createdAt),
+              totalPaid: order.totalPaid,
+            }));
+            setPastOrders(mappedOrders);
+          } else {
+            setPastOrders([]);
+          }
+        }
       } catch {
         // Keep fallback data to avoid blocking profile screen on transient failures.
+        if (isMounted) {
+          setPastOrders([]);
+        }
       } finally {
         if (isMounted) {
           setAddressesLoading(false);
+          setOrdersLoading(false);
         }
       }
     };
@@ -203,6 +323,119 @@ export default function ProfilePage() {
     if (!trimmed) return '';
     if (trimmed.startsWith('+')) return trimmed;
     return `+91${trimmed.replace(/^0+/, '')}`;
+  };
+
+  const handleSetDefaultAddress = async (addressId: string) => {
+    try {
+      setAddressesErr('');
+      setAddressesMsg('');
+
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setAddressesErr('Please login again to update addresses.');
+        return;
+      }
+
+      const response = await fetch(`/api/customer/addresses/${addressId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ isDefault: true }),
+      });
+
+      if (!response.ok) {
+        setAddressesErr('Unable to set default address.');
+        return;
+      }
+
+      await refreshAddresses(accessToken);
+      setAddressesMsg('Default address updated.');
+    } catch {
+      setAddressesErr('Unable to set default address.');
+    }
+  };
+
+  const handleDeleteAddress = async (addressId: string) => {
+    try {
+      setAddressesErr('');
+      setAddressesMsg('');
+
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setAddressesErr('Please login again to update addresses.');
+        return;
+      }
+
+      const response = await fetch(`/api/customer/addresses/${addressId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        setAddressesErr('Unable to delete address.');
+        return;
+      }
+
+      await refreshAddresses(accessToken);
+      setAddressesMsg('Address deleted.');
+    } catch {
+      setAddressesErr('Unable to delete address.');
+    }
+  };
+
+  const handleQuickAddAddress = async () => {
+    try {
+      setAddressesErr('');
+      setAddressesMsg('');
+
+      const line1 = window.prompt('Address line 1');
+      if (!line1?.trim()) return;
+
+      const city = window.prompt('City');
+      if (!city?.trim()) return;
+
+      const state = window.prompt('State');
+      if (!state?.trim()) return;
+
+      const pincode = window.prompt('Pincode');
+      if (!pincode?.trim()) return;
+
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setAddressesErr('Please login again to add addresses.');
+        return;
+      }
+
+      const response = await fetch('/api/customer/addresses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          label: 'OTHER',
+          line1: line1.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          pincode: pincode.trim(),
+          isDefault: addresses.length === 0,
+        }),
+      });
+
+      if (!response.ok) {
+        setAddressesErr('Unable to add address.');
+        return;
+      }
+
+      await refreshAddresses(accessToken);
+      setAddressesMsg('Address added.');
+    } catch {
+      setAddressesErr('Unable to add address.');
+    }
   };
 
   const persistProfile = (next: { name?: string; email?: string; phone?: string }) => {
@@ -301,205 +534,163 @@ export default function ProfilePage() {
     }
   };
 
-  const paymentMethods = [
-    { id: 1, type: 'Google Pay', details: 'nikhil@oksbi', emoji: '🔵', color: '#3B82F6', isDefault: true },
-    { id: 2, type: 'HDFC Visa •••• 4289', details: 'Expires 08/27', emoji: '💳', color: '#8B5CF6', isDefault: false },
-  ];
+  const openEditDrawer = () => {
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditPhone(user.phone);
+    setNewEmail(user.email);
+    setNewPhone(user.phone);
+    setPhoneOtp('');
+    setPhoneOtpSent(false);
+    setContactMsg('');
+    setContactErr('');
+    setIsEditDrawerOpen(true);
+  };
+
+  const handleSaveBasicProfile = () => {
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
+      setContactErr('Name cannot be empty.');
+      setContactMsg('');
+      return;
+    }
+    persistProfile({ name: trimmedName });
+    setContactErr('');
+    setContactMsg('Profile details updated.');
+    setIsEditDrawerOpen(false);
+  };
 
   const menuItems = [
-    { id: 'personal-info', label: 'Personal Info', icon: User },
-    { id: 'saved-addresses', label: 'Saved Addresses', icon: MapPin },
-    { id: 'payment-methods', label: 'Payment Methods', icon: CreditCard },
-    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'personal-info', label: 'Orders', icon: Package },
+    { id: 'payment-methods', label: 'Payments', icon: CreditCard },
+    { id: 'saved-addresses', label: 'Addresses', icon: MapPin },
+    { id: 'security', label: 'Settings', icon: Settings },
   ];
 
   const S = {
-    sectionHeader: { padding: '20px 28px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' } as React.CSSProperties,
-    sectionIcon: { width: 40, height: 40, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } as React.CSSProperties,
+    sectionHeader: { padding: '22px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: '#FFFFFF' } as React.CSSProperties,
+    sectionIcon: { width: 36, height: 36, borderRadius: 8, background: '#FFF1E8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 } as React.CSSProperties,
     label: { fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 6, display: 'block' },
     value: { fontSize: 15, fontWeight: 500, color: '#0F172A' },
-    btnPrimary: { display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: '#F97316', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
-    btnOutline: { display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', background: '#FFF7ED', color: '#F97316', border: '1px solid #FED7AA', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
-    input: { width: '100%', padding: '12px 14px', border: '1.5px solid #E2E8F0', borderRadius: 10, fontSize: 14, color: '#0F172A', outline: 'none', boxSizing: 'border-box' as const },
+    btnPrimary: { display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: '#FC8019', color: '#fff', border: 'none', borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+    btnOutline: { display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: '#fff', color: '#FC8019', border: '1px solid #FC8019', borderRadius: 2, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as React.CSSProperties,
+    input: { width: '100%', padding: '11px 12px', border: '1px solid #D1D5DB', borderRadius: 2, fontSize: 14, color: '#0F172A', outline: 'none', boxSizing: 'border-box' as const },
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F1F5F9' }}>
+    <div style={{ minHeight: '100vh', background: '#3D7996' }}>
       <Navbar />
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 32px' }}>
-
-        {/* Page header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '28px 20px 56px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30 }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>My Account</h1>
-            <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your profile, addresses, and preferences</p>
+            <p style={{ fontSize: 26, fontWeight: 700, color: '#FFFFFF', lineHeight: 1.1, marginBottom: 4 }}>{user.name}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'rgba(255,255,255,0.86)', fontSize: 14 }}>
+              <span>{user.phone || '+91 xxxxxxxxxx'}</span>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span style={{ fontSize: 14 }}>{user.email || 'no-email@sevam.com'}</span>
+            </div>
           </div>
-          <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#EF4444' }}>
-            <LogOut style={{ width: 15, height: 15 }} /> Sign Out
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
+              <LogOut style={{ width: 18, height: 18 }} /> Sign Out
+            </button>
+            <button
+              onClick={openEditDrawer}
+              style={{ padding: '11px 20px', border: '1px solid rgba(255,255,255,0.75)', background: 'transparent', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
+            >
+              EDIT PROFILE
+            </button>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        <div style={{ background: '#F4F5F7', padding: 40 }}>
+          <div style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
+            <div style={{ width: 240, background: '#E7EBF0', padding: '18px 0', flexShrink: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeTab === item.id;
 
-          {/* LEFT SIDEBAR */}
-          <div style={{ width: 256, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-            {/* Profile card */}
-            <div style={{ background: 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)', borderRadius: 18, padding: '24px 20px', color: '#fff', position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
-              <div style={{ position: 'relative', marginBottom: 16 }}>
-                <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                  <span style={{ fontSize: 26, fontWeight: 800, color: '#1A3C6E' }}>{user.initials}</span>
-                  <div style={{ position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: '50%', background: '#F97316', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Check style={{ width: 10, height: 10, color: '#fff' }} />
-                  </div>
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', border: 'none', borderLeft: active ? '3px solid #FC8019' : '3px solid transparent', background: active ? '#FFFFFF' : 'transparent', color: '#2F3542', fontSize: 15, fontWeight: active ? 700 : 500, cursor: 'pointer', padding: '14px 20px' }}
+                    >
+                      <Icon style={{ width: 18, height: 18, color: active ? '#111827' : '#4B5563' }} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', color: '#4B5563' }}>
+                  <HelpCircle style={{ width: 18, height: 18 }} />
+                  <span style={{ fontSize: 15, fontWeight: 500 }}>Swiggy One</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', color: '#4B5563' }}>
+                  <Heart style={{ width: 18, height: 18 }} />
+                  <span style={{ fontSize: 15, fontWeight: 500 }}>Favourites</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <p style={{ fontSize: 15, fontWeight: 700 }}>{user.name}</p>
-                <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#F97316', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Check style={{ width: 9, height: 9, color: '#fff' }} />
-                </div>
-              </div>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 2 }}>{user.email}</p>
-              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Member since {user.memberSince}</p>
             </div>
 
-            {/* Nav menu */}
-            <div style={{ background: '#ffffff', borderRadius: 14, overflow: 'hidden', padding: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              {menuItems.map(item => {
-                const Icon = item.icon;
-                const active = activeTab === item.id;
-                return (
-                  <button key={item.id} onClick={() => setActiveTab(item.id)}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? '#FFF7ED' : 'transparent', color: active ? '#F97316' : '#64748B', marginBottom: 2, transition: 'all 0.15s' }}
-                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = '#F8FAFC'; }}
-                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                  >
-                    <Icon style={{ width: 16, height: 16 }} />
-                    <span style={{ fontSize: 14, fontWeight: active ? 600 : 400, flex: 1, textAlign: 'left' as const }}>{item.label}</span>
-                    {active && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#F97316' }} />}
-                  </button>
-                );
-              })}
-            </div>
+            <div style={{ flex: 1, background: '#fff', border: '1px solid #D8DDE3', minHeight: 620 }}>
 
-            {/* Help card */}
-            <div style={{ background: 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)', borderRadius: 18, padding: '24px 20px', textAlign: 'center', color: '#fff' }}>
-              <div style={{ width: 46, height: 46, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                <HelpCircle style={{ width: 22, height: 22, color: '#fff' }} />
-              </div>
-              <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Need help?</p>
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>Our support team is available 24/7</p>
-              <button style={{ width: '100%', padding: '11px 0', background: '#F97316', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#EA580C')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#F97316')}
-              >Contact Support</button>
-            </div>
-          </div>
-
-          {/* RIGHT CONTENT */}
-          <div style={{ flex: 1, background: '#ffffff', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-
-            {/* ── PERSONAL INFO ── */}
+            {/* ── ORDERS ── */}
             {activeTab === 'personal-info' && (
               <>
                 <div style={S.sectionHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={S.sectionIcon}><User style={{ width: 20, height: 20, color: '#F97316' }} /></div>
+                    <div style={S.sectionIcon}><Package style={{ width: 20, height: 20, color: '#F97316' }} /></div>
                     <div>
-                      <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Personal Information</p>
-                      <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your name, contact details and bio</p>
+                      <p style={{ fontSize: 24, fontWeight: 700, color: '#1F2937', marginBottom: 2 }}>Past Orders</p>
+                      <p style={{ fontSize: 13, color: '#6B7280' }}>Review previous bookings and repeat services quickly</p>
                     </div>
                   </div>
-                  <button style={S.btnOutline}><Edit style={{ width: 14, height: 14 }} /> Edit</button>
+                  <button style={S.btnOutline}>VIEW ALL</button>
                 </div>
 
-                <div style={{ padding: '28px 28px', borderBottom: '1px solid #F1F5F9' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px 40px' }}>
-                    <div>
-                      <span style={S.label}>Full Name</span>
-                      <p style={S.value}>{user.name}</p>
-                    </div>
-                    <div>
-                      <span style={S.label}>Phone Number</span>
-                      {user.phone ? (
-                        <p style={S.value}>{user.phone}</p>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input
-                            value={newPhone}
-                            onChange={(e) => setNewPhone(e.target.value)}
-                            placeholder="Add phone number"
-                            style={{ ...S.input, maxWidth: 230, padding: '9px 10px' }}
-                          />
-                          {!phoneOtpSent ? (
-                            <button style={S.btnOutline} onClick={handleSendPhoneOtp} disabled={contactLoading}>Verify</button>
-                          ) : (
-                            <>
-                              <input
-                                value={phoneOtp}
-                                onChange={(e) => setPhoneOtp(e.target.value)}
-                                placeholder="OTP"
-                                style={{ ...S.input, width: 90, padding: '9px 10px' }}
-                              />
-                              <button style={S.btnOutline} onClick={handleVerifyPhoneOtp} disabled={contactLoading}>Submit</button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <span style={S.label}>Email Address</span>
-                      {user.email ? (
-                        <p style={{ ...S.value, color: '#2563EB' }}>{user.email}</p>
-                      ) : (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input
-                            value={newEmail}
-                            onChange={(e) => setNewEmail(e.target.value)}
-                            placeholder="Add email address"
-                            style={{ ...S.input, maxWidth: 320, padding: '9px 10px' }}
-                          />
-                          <button style={S.btnOutline} onClick={handleSendEmailVerification} disabled={contactLoading}>Verify</button>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <span style={S.label}>Date of Birth</span>
-                      <p style={S.value}>{user.dob}</p>
-                    </div>
-                    <div>
-                      <span style={S.label}>Gender</span>
-                      <p style={{ ...S.value, color: '#2563EB' }}>{user.gender}</p>
-                    </div>
-                  </div>
-                </div>
+                <div style={{ padding: '22px 24px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {ordersLoading && (
+                    <p style={{ fontSize: 13, color: '#6B7280' }}>Loading past orders...</p>
+                  )}
 
-                {(contactMsg || contactErr) && (
-                  <div style={{ padding: '0 28px 12px' }}>
-                    {contactMsg && <p style={{ fontSize: 13, color: '#16A34A' }}>{contactMsg}</p>}
-                    {contactErr && <p style={{ fontSize: 13, color: '#EF4444' }}>{contactErr}</p>}
-                  </div>
-                )}
+                  {!ordersLoading && pastOrders.length === 0 && (
+                    <div style={{ border: '1px dashed #D1D5DB', padding: '24px 20px', background: '#fff' }}>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: '#1F2937', marginBottom: 6 }}>No past orders</p>
+                      <p style={{ fontSize: 13, color: '#6B7280' }}>Once you complete a booking, it will appear here.</p>
+                    </div>
+                  )}
 
-                {/* Referral card */}
-                <div style={{ padding: '20px 28px' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #1A3C6E 0%, #2563EB 100%)', borderRadius: 16, padding: '22px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                        <Share2 style={{ width: 14, height: 14, color: '#F97316' }} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#F97316', textTransform: 'uppercase' as const, letterSpacing: '0.1em' }}>Referral Code</span>
+                  {!ordersLoading && pastOrders.map((order) => (
+                    <div key={order.id} style={{ border: '1px solid #E5E7EB', background: '#fff' }}>
+                      <div style={{ padding: '16px 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, borderBottom: '1px solid #ECEFF3' }}>
+                        <div>
+                          <p style={{ fontSize: 18, fontWeight: 700, color: '#1F2937', marginBottom: 3 }}>{order.service}</p>
+                          <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 5 }}>{order.provider}</p>
+                          <p style={{ fontSize: 11, color: '#9CA3AF' }}>ORDER #{order.id} | {order.bookedAt}</p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 5 }}>
+                            <span style={{ fontSize: 12, color: '#4B5563' }}>{order.deliveredAt}</span>
+                            <Check style={{ width: 16, height: 16, color: '#16A34A' }} />
+                          </div>
+                          <button style={{ ...S.btnOutline, padding: '7px 12px', fontSize: 12 }}>VIEW DETAILS</button>
+                        </div>
                       </div>
-                      <p style={{ fontSize: 28, fontWeight: 900, color: '#fff', marginBottom: 4, letterSpacing: '0.02em' }}>{user.referralCode}</p>
-                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Share & earn ₹100 per successful referral</p>
+
+                      <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <p style={{ fontSize: 14, color: '#1F2937' }}>{order.item}</p>
+                        <p style={{ fontSize: 15, fontWeight: 700, color: '#1F2937' }}>Total Paid: {order.totalPaid}</p>
+                      </div>
+
+                      <div style={{ padding: '0 18px 16px', display: 'flex', gap: 10 }}>
+                        <button style={{ ...S.btnPrimary, minWidth: 106, justifyContent: 'center' }}>REORDER</button>
+                        <button style={{ ...S.btnOutline, minWidth: 94, justifyContent: 'center' }}>HELP</button>
+                      </div>
                     </div>
-                    <button style={{ padding: '12px 24px', background: '#F97316', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#EA580C')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '#F97316')}
-                    >Share Now</button>
-                  </div>
+                  ))}
                 </div>
+
               </>
             )}
 
@@ -514,13 +705,15 @@ export default function ProfilePage() {
                       <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your delivery and service locations</p>
                     </div>
                   </div>
-                  <button style={S.btnPrimary}><Plus style={{ width: 14, height: 14 }} /> Add Address</button>
+                  <button style={S.btnPrimary} onClick={handleQuickAddAddress}><Plus style={{ width: 14, height: 14 }} /> Add Address</button>
                 </div>
 
-                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {addressesLoading && (
                     <p style={{ fontSize: 13, color: '#94A3B8' }}>Loading saved addresses...</p>
                   )}
+                  {addressesMsg && <p style={{ fontSize: 13, color: '#16A34A' }}>{addressesMsg}</p>}
+                  {addressesErr && <p style={{ fontSize: 13, color: '#EF4444' }}>{addressesErr}</p>}
 
                   {addresses.map(addr => {
                     const Icon = addr.label === 'HOME' ? Home : addr.label === 'OFFICE' ? Briefcase : MapPinned;
@@ -545,12 +738,20 @@ export default function ProfilePage() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                           {!addr.isDefault && (
-                            <button style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}>Set Default</button>
+                            <button
+                              style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}
+                              onClick={() => handleSetDefaultAddress(addr.id)}
+                            >
+                              Set Default
+                            </button>
                           )}
                           <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Edit style={{ width: 14, height: 14, color: '#94A3B8' }} />
                           </button>
-                          <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <button
+                            style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={() => handleDeleteAddress(addr.id)}
+                          >
                             <Trash2 style={{ width: 14, height: 14, color: '#94A3B8' }} />
                           </button>
                         </div>
@@ -560,6 +761,7 @@ export default function ProfilePage() {
 
                   {/* Add new */}
                   <button style={{ width: '100%', border: '2px dashed #E2E8F0', borderRadius: 14, padding: '20px', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#94A3B8', transition: 'all 0.15s' }}
+                    onClick={handleQuickAddAddress}
                     onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FDBA74'); (e.currentTarget.style.color = '#F97316'); }}
                     onMouseLeave={e => { (e.currentTarget.style.borderColor = '#E2E8F0'); (e.currentTarget.style.color = '#94A3B8'); }}
                   >
@@ -576,65 +778,69 @@ export default function ProfilePage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={S.sectionIcon}><CreditCard style={{ width: 20, height: 20, color: '#F97316' }} /></div>
                     <div>
-                      <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Payment Methods</p>
-                      <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your UPI, cards and Sevam wallet</p>
-                    </div>
-                  </div>
-                  <button style={S.btnPrimary}><Plus style={{ width: 14, height: 14 }} /> Add Method</button>
-                </div>
-
-                {/* Wallet */}
-                <div style={{ padding: '20px 28px', borderBottom: '1px solid #F1F5F9' }}>
-                  <div style={{ background: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)', borderRadius: 16, padding: '22px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' as const, letterSpacing: '0.1em', marginBottom: 8 }}>SEVAM WALLET</p>
-                      <p style={{ fontSize: 36, fontWeight: 900, color: '#fff', marginBottom: 4 }}>₹340.00</p>
-                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>Last topped up: 15 Mar 2026</p>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                      <button style={{ padding: '10px 20px', background: '#fff', color: '#F97316', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Add Money</button>
-                      <button style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>History</button>
+                      <p style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 2 }}>Payments</p>
+                      <p style={{ fontSize: 12, color: '#6B7280' }}>Manage cards, wallets and Sevam balance</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Payment list */}
-                <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {paymentMethods.map(method => (
-                    <div key={method.id}
-                      style={{ border: '1.5px solid #F1F5F9', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, transition: 'all 0.15s' }}
-                      onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FED7AA'); (e.currentTarget.style.background = '#FFFBF7'); }}
-                      onMouseLeave={e => { (e.currentTarget.style.borderColor = '#F1F5F9'); (e.currentTarget.style.background = '#fff'); }}
-                    >
-                      <div style={{ width: 44, height: 44, borderRadius: 12, background: method.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                        {method.emoji}
+                <div style={{ padding: '16px 24px 8px', borderBottom: '1px solid #E5E7EB' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ background: 'linear-gradient(135deg, #43B069 0%, #2A9D8F 100%)', borderRadius: 8, padding: '12px 12px', color: '#fff', minHeight: 98 }}>
+                        <p style={{ fontSize: 11, fontWeight: 500, opacity: 0.95, marginBottom: 4 }}>Available Balance</p>
+                        <p style={{ fontSize: 28, fontWeight: 800, marginBottom: 6 }}>₹0</p>
+                        <p style={{ fontSize: 10, lineHeight: 1.35, opacity: 0.9 }}>Sevam money can be used for all your orders across categories.</p>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                          <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{method.type}</p>
-                          {method.isDefault && (
-                            <span style={{ background: '#FFF7ED', color: '#F97316', border: '1px solid #FED7AA', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>Default</span>
-                          )}
+                      <button style={{ width: '52%', border: 'none', background: '#2FAE67', color: '#fff', fontSize: 15, fontWeight: 700, padding: '9px 0', borderRadius: 8, cursor: 'pointer', marginTop: 10 }}>Add Balance</button>
+                    </div>
+
+                    <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 10px' }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 4 }}>Share love through e-gift vouchers!</p>
+                      <p style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.35, marginBottom: 8 }}>Celebrate special occasions with your loved ones with e-gift vouchers.</p>
+                      <button style={{ border: 'none', background: 'none', color: '#FC8019', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: 0 }}>Buy a gift voucher</button>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: 11, color: '#6B7280', textAlign: 'left', marginBottom: 8 }}>
+                    Have a gift voucher? <button style={{ border: 'none', background: 'none', color: '#2FAE67', fontWeight: 700, cursor: 'pointer', fontSize: 11 }}>Redeem Now</button>
+                  </p>
+                </div>
+
+                <div style={{ padding: '0 24px 22px' }}>
+                  <div style={{ border: '1px solid #E5E7EB' }}>
+                    <div style={{ background: '#F3F4F6', borderBottom: '1px solid #E5E7EB', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#4B5563' }}>SAVED CARDS</div>
+                    <div style={{ padding: '14px 14px', borderBottom: '1px solid #E5E7EB' }}>
+                      <button style={{ display: 'flex', alignItems: 'center', gap: 12, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+                        <span style={{ width: 34, height: 24, border: '1.5px solid #FC8019', color: '#FC8019', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700 }}>+</span>
+                        <span style={{ color: '#FC8019', fontSize: 15, fontWeight: 700 }}>ADD NEW CARD</span>
+                      </button>
+                      <div style={{ marginTop: 12, color: '#9CA3AF', fontSize: 12, fontWeight: 700, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span>VISA</span>
+                        <span>Mastercard</span>
+                        <span>AMEX</span>
+                        <span>RuPay</span>
+                        <span>Zeta</span>
+                        <span>Sodexo</span>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#F3F4F6', borderBottom: '1px solid #E5E7EB', padding: '10px 14px', fontSize: 13, fontWeight: 700, color: '#4B5563' }}>WALLET</div>
+
+                    {[
+                      { name: 'Mobikwik', iconBg: '#00B7A8', iconLabel: 'M' },
+                      { name: 'PhonePe', iconBg: '#6D28D9', iconLabel: 'P' },
+                      { name: 'Amazon Pay', iconBg: '#1F2937', iconLabel: 'pay' },
+                    ].map((wallet) => (
+                      <div key={wallet.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid #E5E7EB' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ width: 30, height: 30, borderRadius: '50%', background: wallet.iconBg, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{wallet.iconLabel}</span>
+                          <p style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{wallet.name}</p>
                         </div>
-                        <p style={{ fontSize: 13, color: '#94A3B8' }}>{method.details}</p>
+                        <button style={{ border: 'none', background: 'none', color: '#FC8019', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>LINK ACCOUNT</button>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {!method.isDefault && (
-                          <button style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}>Set Default</button>
-                        )}
-                        <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Trash2 style={{ width: 14, height: 14, color: '#94A3B8' }} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  <button style={{ width: '100%', border: '2px dashed #E2E8F0', borderRadius: 14, padding: '20px', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#94A3B8', transition: 'all 0.15s' }}
-                    onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FDBA74'); (e.currentTarget.style.color = '#F97316'); }}
-                    onMouseLeave={e => { (e.currentTarget.style.borderColor = '#E2E8F0'); (e.currentTarget.style.color = '#94A3B8'); }}
-                  >
-                    <Plus style={{ width: 16, height: 16 }} /> Add Payment Method
-                  </button>
+                    ))}
+                  </div>
                 </div>
               </>
             )}
@@ -651,7 +857,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Change password */}
-                <div style={{ padding: '24px 28px', borderBottom: '1px solid #F1F5F9' }}>
+                <div style={{ padding: '24px 24px', borderBottom: '1px solid #F1F5F9' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Lock style={{ width: 16, height: 16, color: '#F97316' }} />
@@ -696,7 +902,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* 2FA */}
-                <div style={{ padding: '22px 28px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ padding: '22px 24px', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Two-Factor Authentication</p>
                     <p style={{ fontSize: 13, color: '#94A3B8' }}>Add an extra layer of security to your account via OTP on login</p>
@@ -708,7 +914,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Active sessions */}
-                <div style={{ padding: '22px 28px' }}>
+                <div style={{ padding: '22px 24px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Smartphone style={{ width: 16, height: 16, color: '#F97316' }} />
@@ -731,9 +937,145 @@ export default function ProfilePage() {
               </>
             )}
 
+            </div>
           </div>
         </div>
       </div>
+
+      {isEditDrawerOpen && (
+        <>
+          <div
+            onClick={() => setIsEditDrawerOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.42)', zIndex: 80 }}
+          />
+          <aside
+            style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: 'min(430px, 100vw)', background: '#ffffff', boxShadow: '-8px 0 32px rgba(15, 23, 42, 0.18)', zIndex: 90, display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ padding: '20px 22px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>Edit Profile</p>
+                <p style={{ fontSize: 13, color: '#64748B' }}>Update your basic profile details</p>
+              </div>
+              <button
+                onClick={() => setIsEditDrawerOpen(false)}
+                style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                aria-label="Close edit profile panel"
+              >
+                <X style={{ width: 16, height: 16, color: '#334155' }} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px 22px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: '#1E3A8A' }}>{user.initials}</span>
+                </div>
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#0F172A' }}>{user.name}</p>
+                  <p style={{ fontSize: 12, color: '#64748B' }}>Member since {user.memberSince}</p>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ ...S.label, marginBottom: 8 }}>Full Name</label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Enter your full name"
+                  style={S.input}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ ...S.label, marginBottom: 8 }}>Email Address</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    value={editEmail}
+                    onChange={(e) => {
+                      setEditEmail(e.target.value);
+                      setNewEmail(e.target.value);
+                    }}
+                    placeholder="Enter email"
+                    style={{ ...S.input, flex: 1 }}
+                  />
+                  <button
+                    onClick={handleSendEmailVerification}
+                    disabled={contactLoading || !editEmail.trim()}
+                    style={{ ...S.btnOutline, opacity: contactLoading || !editEmail.trim() ? 0.6 : 1 }}
+                  >
+                    Verify
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ ...S.label, marginBottom: 8 }}>Phone Number</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    value={editPhone}
+                    onChange={(e) => {
+                      setEditPhone(e.target.value);
+                      setNewPhone(e.target.value);
+                      setPhoneOtpSent(false);
+                      setPhoneOtp('');
+                    }}
+                    placeholder="Enter phone number"
+                    style={{ ...S.input, flex: 1 }}
+                  />
+                  {!phoneOtpSent ? (
+                    <button
+                      onClick={handleSendPhoneOtp}
+                      disabled={contactLoading || !editPhone.trim()}
+                      style={{ ...S.btnOutline, opacity: contactLoading || !editPhone.trim() ? 0.6 : 1 }}
+                    >
+                      Verify
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleVerifyPhoneOtp}
+                      disabled={contactLoading || !phoneOtp.trim()}
+                      style={{ ...S.btnOutline, opacity: contactLoading || !phoneOtp.trim() ? 0.6 : 1 }}
+                    >
+                      Submit OTP
+                    </button>
+                  )}
+                </div>
+
+                {phoneOtpSent && (
+                  <input
+                    value={phoneOtp}
+                    onChange={(e) => setPhoneOtp(e.target.value)}
+                    placeholder="Enter OTP"
+                    style={{ ...S.input, marginTop: 10 }}
+                  />
+                )}
+              </div>
+
+              {(contactMsg || contactErr) && (
+                <div style={{ marginBottom: 14 }}>
+                  {contactMsg && <p style={{ fontSize: 13, color: '#16A34A' }}>{contactMsg}</p>}
+                  {contactErr && <p style={{ fontSize: 13, color: '#EF4444' }}>{contactErr}</p>}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '16px 22px', borderTop: '1px solid #E2E8F0', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setIsEditDrawerOpen(false)}
+                style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid #CBD5E1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveBasicProfile}
+                style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#F97316', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

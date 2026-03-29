@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   HardHat, Wrench, Sparkles, Settings, Zap, ChefHat,
   Scissors,
@@ -72,6 +73,7 @@ const mapCatalogToCategories = (data: ServiceCatalogApiResponse): Category[] =>
   }));
 
 export default function ServicesPage() {
+  const searchParams = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [categories, setCategories] = useState<Category[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -79,6 +81,7 @@ export default function ServicesPage() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [popup, setPopup] = useState<{ service: SubService; categoryName: string } | null>(null);
+  const queryHandledRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -154,6 +157,39 @@ export default function ServicesPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (queryHandledRef.current) return;
+    if (categories.length === 0) return;
+
+    const requestedServiceId = searchParams.get('serviceId');
+    const requestedCategory = searchParams.get('category');
+
+    if (!requestedServiceId && !requestedCategory) {
+      queryHandledRef.current = true;
+      return;
+    }
+
+    if (requestedCategory) {
+      const exists = categories.some((category) => category.slug === requestedCategory);
+      if (exists) {
+        setSelectedCategory(requestedCategory);
+      }
+    }
+
+    if (requestedServiceId) {
+      for (const category of categories) {
+        const matched = category.subcategories.find((service) => service.id === requestedServiceId);
+        if (matched) {
+          setSelectedCategory(category.slug);
+          setPopup({ service: matched, categoryName: matched.categoryName });
+          break;
+        }
+      }
+    }
+
+    queryHandledRef.current = true;
+  }, [categories, searchParams]);
 
   const sidebarItems = useMemo(
     () => [

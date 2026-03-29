@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Search, ShoppingCart, ChevronDown, X } from 'lucide-react';
 import { supabase } from '@/lib/db/supabase';
 
@@ -25,6 +26,7 @@ type NavbarUser = {
   name: string;
   email: string;
   phone: string;
+  avatarUrl?: string;
 };
 
 function cleanPhone(phone?: string) {
@@ -183,6 +185,10 @@ export default function Navbar() {
         name: (user.user_metadata?.full_name as string | undefined) ?? "Customer",
         email: user.email ?? "",
         phone: cleanPhone(user.phone ?? ""),
+        avatarUrl:
+          (user.user_metadata?.avatar_url as string | undefined) ||
+          (user.user_metadata?.picture as string | undefined) ||
+          "",
       };
       const syncedProfile = await syncProfileToBackend(fallbackProfile, data.session?.access_token);
       setAuthUser(syncedProfile);
@@ -202,6 +208,10 @@ export default function Navbar() {
         name: (user.user_metadata?.full_name as string | undefined) ?? "Customer",
         email: user.email ?? "",
         phone: cleanPhone(user.phone ?? ""),
+        avatarUrl:
+          (user.user_metadata?.avatar_url as string | undefined) ||
+          (user.user_metadata?.picture as string | undefined) ||
+          "",
       };
       void (async () => {
         const syncedProfile = await syncProfileToBackend(fallbackProfile, session?.access_token);
@@ -356,10 +366,16 @@ export default function Navbar() {
             className="pr-3 lg:pr-8 border-r border-[#e5e7eb] h-full flex items-center shrink-0"
             style={{ borderRightColor: '#e5e7eb' }}
           >
-            <div className="text-[26px] lg:text-[36px] font-black tracking-tighter" style={{ fontFamily: 'Arial, sans-serif' }}>
-              <span className="text-[#E65100]">Se</span>
-              <span className="text-[#007FFF]">VAM</span>
-            </div>
+            <Link href="/customer/dashboard" aria-label="Go to home">
+              <Image
+                src="/logo.png"
+                alt="Sevam"
+                width={130}
+                height={42}
+                className="w-[98px] lg:w-[130px] h-auto cursor-pointer"
+                priority
+              />
+            </Link>
           </div>
           
           {/* Location */}
@@ -408,39 +424,52 @@ export default function Navbar() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-[42px] w-[290px] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden">
-                  <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-                    <p className="text-[30px] leading-none mb-1">👋</p>
-                    <p className="text-[28px] leading-none mb-1">Hi</p>
-                    <p className="text-[26px] leading-none font-semibold text-gray-900">{authUser.name || 'Account'}</p>
-                    <p className="text-[12px] text-gray-500 mt-2 truncate">{cleanPhone(authUser.phone) || authUser.email || 'No contact added'}</p>
+                <div className="absolute right-0 top-[42px] w-[300px] bg-white rounded-2xl shadow-[0_10px_30px_rgba(15,23,42,0.12)] z-50 overflow-hidden">
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-11 w-11 rounded-full overflow-hidden border border-[#E5E7EB] bg-[#F3F4F6] shrink-0 flex items-center justify-center">
+                        {authUser.avatarUrl ? (
+                          <Image src={authUser.avatarUrl} alt={authUser.name || 'User'} fill className="object-cover" />
+                        ) : (
+                          <span className="text-[16px] font-bold text-[#374151]">
+                            {(authUser.name?.charAt(0) || 'U').toUpperCase()}
+                          </span>
+                        )}
+                        <span className="absolute right-0.5 bottom-0.5 h-2.5 w-2.5 rounded-full bg-[#22C55E] border border-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[30px] leading-none font-semibold text-gray-900 truncate">{authUser.name || 'Account'}</p>
+                        <p className="text-[12px] text-gray-500 mt-0.5 truncate">{cleanPhone(authUser.phone) || authUser.email || 'No contact added'}</p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="py-1">
+                  <div className="py-2">
                     <Link
                       href="/customer/profile"
                       onClick={() => setMenuOpen(false)}
-                      className="block px-4 py-2.5 text-[15px] text-gray-700 hover:bg-gray-50"
+                      className="block mx-2 px-3 py-2 rounded-lg text-[15px] text-[#374151] hover:bg-[#EEF4FF] hover:text-[#1D4ED8]"
                     >
                       My Profile
                     </Link>
                     <Link
                       href="/customer/bookings"
                       onClick={() => setMenuOpen(false)}
-                      className="block px-4 py-2.5 text-[15px] text-gray-700 hover:bg-gray-50"
+                      className="block mx-2 px-3 py-2 rounded-lg text-[15px] text-[#374151] hover:bg-[#EEF4FF] hover:text-[#1D4ED8]"
                     >
                       My Orders
                     </Link>
                     <Link
                       href="/customer/profile"
                       onClick={() => setMenuOpen(false)}
-                      className="block px-4 py-2.5 text-[15px] text-gray-700 hover:bg-gray-50"
+                      className="block mx-2 px-3 py-2 rounded-lg text-[15px] text-[#374151] hover:bg-[#EEF4FF] hover:text-[#1D4ED8]"
                     >
                       Saved Addresses
                     </Link>
+                    <div className="my-2" />
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-4 py-2.5 text-[15px] text-red-600 hover:bg-red-50"
+                      className="w-[calc(100%-16px)] mx-2 text-left px-3 py-2 rounded-lg text-[15px] text-[#374151] hover:bg-[#F9FAFB]"
                     >
                       Log Out
                     </button>
