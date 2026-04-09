@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:checkout-api": "node scripts/test-checkout-api.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

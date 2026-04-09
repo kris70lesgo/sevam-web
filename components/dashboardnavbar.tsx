@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, ShoppingCart, ChevronDown, X } from 'lucide-react';
+import { Search, ShoppingCart, ChevronDown, X, Minus, Plus } from 'lucide-react';
 import { supabase } from '@/lib/db/supabase';
+import { readCartRaw, syncCartRawToServer, writeCartRaw } from '@/lib/utils/cart-storage';
 
 type LocationResult = {
   name: string;
@@ -15,9 +16,15 @@ type LocationResult = {
 
 const LOCATION_STORAGE_KEY = "sevam_selected_location";
 const PROFILE_STORAGE_KEY = "sevam_profile";
-const CART_STORAGE_KEY = 'sevam_service_cart';
+const CHECKOUT_ADDRESS_STORAGE_KEY = 'sevam_checkout_address';
+const DEFAULT_NAV_LOCATION_LINE = "Shivam Market, 2nd Floor, 1 Ner...";
 
 type CartStorageItem = {
+  id: string;
+  name: string;
+  categoryName?: string;
+  duration?: string;
+  image?: string;
   price: number;
   quantity: number;
 };
@@ -27,6 +34,13 @@ type NavbarUser = {
   email: string;
   phone: string;
   avatarUrl?: string;
+};
+
+type CheckoutAddress = {
+  id: string;
+  label: string;
+  line: string;
+  eta: string;
 };
 
 function cleanPhone(phone?: string) {
@@ -70,11 +84,42 @@ export default function Navbar() {
   const [authUser, setAuthUser] = useState<NavbarUser | null>(null);
   const [navSearch, setNavSearch] = useState('');
   const [cartSummary, setCartSummary] = useState({ itemCount: 0, total: 0 });
+  const [cartItems, setCartItems] = useState<CartStorageItem[]>([]);
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isAddressSelectModalOpen, setIsAddressSelectModalOpen] = useState(false);
+  const [checkoutAddresses, setCheckoutAddresses] = useState<CheckoutAddress[]>([]);
+  const [selectedCheckoutAddressId, setSelectedCheckoutAddressId] = useState('');
+  const [selectedCheckoutAddress, setSelectedCheckoutAddress] = useState<CheckoutAddress | null>(null);
+  const [checkoutAddressLoading, setCheckoutAddressLoading] = useState(false);
+  const [checkoutAddressError, setCheckoutAddressError] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  const calculateCartSummary = (items: CartStorageItem[]) => {
+    const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const total = subtotal + (itemCount > 0 ? 50 : 0);
+    return { itemCount, subtotal, total };
+  };
+
+  const persistCartItems = (items: CartStorageItem[]) => {
+    const raw = JSON.stringify(items);
+    writeCartRaw(raw);
+    void syncCartRawToServer(raw);
+    window.dispatchEvent(new Event('sevam-cart-updated'));
+    setCartItems(items);
+    const { itemCount, total } = calculateCartSummary(items);
+    setCartSummary({ itemCount, total });
+  };
+
+  const persistCheckoutAddress = (address: CheckoutAddress) => {
+    setSelectedCheckoutAddress(address);
+    setSelectedCheckoutAddressId(address.id);
+    localStorage.setItem(CHECKOUT_ADDRESS_STORAGE_KEY, JSON.stringify(address));
+  };
 
   const refreshCartSummary = () => {
     try {
-      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      const raw = readCartRaw();
       if (!raw) {
         setCartSummary({ itemCount: 0, total: 0 });
         return;
@@ -82,20 +127,139 @@ export default function Navbar() {
 
       const parsed = JSON.parse(raw) as CartStorageItem[];
       if (!Array.isArray(parsed)) {
+        setCartItems([]);
         setCartSummary({ itemCount: 0, total: 0 });
         return;
       }
 
-      const itemCount = parsed.reduce((sum, item) => sum + (Number.isFinite(item?.quantity) ? item.quantity : 0), 0);
-      const subtotal = parsed.reduce(
-        (sum, item) => sum + ((Number.isFinite(item?.price) ? item.price : 0) * (Number.isFinite(item?.quantity) ? item.quantity : 0)),
-        0
+      const safeItems = parsed.filter((item) =>
+        Boolean(item?.id) &&
+        Boolean(item?.name) &&
+        Number.isFinite(item?.price) &&
+        Number.isFinite(item?.quantity) &&
+        item.quantity > 0
       );
-      const total = subtotal + (itemCount > 0 ? 50 : 0);
+
+      const { itemCount, total } = calculateCartSummary(safeItems);
+      setCartItems(safeItems);
       setCartSummary({ itemCount, total });
     } catch {
+      setCartItems([]);
       setCartSummary({ itemCount: 0, total: 0 });
     }
+  };
+
+  const handleUpdateCartQty = (itemId: string, delta: number) => {
+    const next = cartItems
+      .map((item) => (item.id === itemId ? { ...item, quantity: item.quantity + delta } : item))
+      .filter((item) => item.quantity > 0);
+    persistCartItems(next);
+  };
+
+  const handleCartButtonClick = () => {
+    if (cartSummary.itemCount > 0) {
+      setIsCartDrawerOpen(true);
+      return;
+    }
+    router.push('/customer/services');
+  };
+
+  const loadCheckoutAddresses = async () => {
+    setCheckoutAddressLoading(true);
+    setCheckoutAddressError(null);
+
+    const options: CheckoutAddress[] = [];
+
+    if (selectedLocation) {
+      options.push({
+        id: 'nav-location',
+        label: 'Current Location',
+        line: selectedLocation.name,
+        eta: 'Quick arrival',
+      });
+    } else if (locationLine.trim()) {
+      options.push({
+        id: 'nav-location-fallback',
+        label: 'Current Location',
+        line: locationLine,
+        eta: 'From navbar',
+      });
+    }
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+
+      if (accessToken) {
+        const response = await fetch('/api/customer/addresses', {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          cache: 'no-store',
+        });
+
+        if (response.ok) {
+          const payload = (await response.json()) as {
+            addresses?: Array<{
+              id: string;
+              label: 'HOME' | 'OFFICE' | 'OTHER';
+              line1: string;
+              line2?: string | null;
+              landmark?: string | null;
+              city: string;
+              pincode: string;
+              isDefault: boolean;
+            }>;
+          };
+
+          const mapped = (payload.addresses ?? []).map((addr) => {
+            const line2 = addr.line2?.trim() ? `, ${addr.line2.trim()}` : '';
+            const landmark = addr.landmark?.trim() ? `, ${addr.landmark.trim()}` : '';
+            return {
+              id: addr.id,
+              label: addr.label === 'HOME' ? 'Home' : addr.label === 'OFFICE' ? 'Office' : 'Other',
+              line: `${addr.line1}${line2}${landmark}, ${addr.city} - ${addr.pincode}`,
+              eta: addr.isDefault ? 'Default address' : 'Saved address',
+            };
+          });
+          options.push(...mapped);
+        }
+      }
+
+      setCheckoutAddresses(options);
+      if (selectedCheckoutAddressId && options.some((item) => item.id === selectedCheckoutAddressId)) {
+        return;
+      }
+      if (options.length > 0) {
+        setSelectedCheckoutAddressId(options[0].id);
+      }
+    } catch {
+      if (options.length === 0) {
+        setCheckoutAddressError('Unable to load saved addresses.');
+      }
+      setCheckoutAddresses(options);
+    } finally {
+      setCheckoutAddressLoading(false);
+    }
+  };
+
+  const openAddressSelector = async () => {
+    setIsAddressSelectModalOpen(true);
+    await loadCheckoutAddresses();
+  };
+
+  const handleProceedToPayment = () => {
+    const chosen = checkoutAddresses.find((item) => item.id === selectedCheckoutAddressId);
+    if (!chosen) {
+      setCheckoutAddressError('Select an address to continue.');
+      return;
+    }
+
+    persistCheckoutAddress(chosen);
+    setIsAddressSelectModalOpen(false);
+    setIsCartDrawerOpen(false);
+    router.push('/customer/payment');
   };
 
   useEffect(() => {
@@ -108,6 +272,19 @@ export default function Navbar() {
       }
     } catch {
       localStorage.removeItem(LOCATION_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CHECKOUT_ADDRESS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as CheckoutAddress;
+      if (!parsed?.id || !parsed?.line) return;
+      setSelectedCheckoutAddress(parsed);
+      setSelectedCheckoutAddressId(parsed.id);
+    } catch {
+      localStorage.removeItem(CHECKOUT_ADDRESS_STORAGE_KEY);
     }
   }, []);
 
@@ -156,6 +333,12 @@ export default function Navbar() {
       window.removeEventListener('sevam-cart-updated', handleCartUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    if (cartSummary.itemCount === 0) {
+      setIsCartDrawerOpen(false);
+    }
+  }, [cartSummary.itemCount]);
 
   useEffect(() => {
     if (pathname !== '/customer/search') {
@@ -324,7 +507,7 @@ export default function Navbar() {
     );
   };
 
-  const locationLine = selectedLocation?.name ?? "Shivam Market, 2nd Floor, 1 Ner...";
+  const locationLine = selectedLocation?.name ?? DEFAULT_NAV_LOCATION_LINE;
 
   const handleNavbarSearchChange = (value: string) => {
     setNavSearch(value);
@@ -483,7 +666,7 @@ export default function Navbar() {
             </Link>
           )}
           <button
-            onClick={() => router.push('/customer/services')}
+            onClick={handleCartButtonClick}
             className="flex items-center h-[56px] min-w-[122px] bg-[#007FFF] hover:bg-[#0066CC] transition-colors text-white pl-3 pr-2 rounded-lg font-bold"
           >
             <ShoppingCart className="w-5 h-5 mr-2" />
@@ -498,6 +681,161 @@ export default function Navbar() {
           </button>
         </div>
       </nav>
+
+      {isCartDrawerOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/35 z-50" onClick={() => setIsCartDrawerOpen(false)} />
+          <aside className="fixed top-0 right-0 h-full w-[420px] max-w-[95vw] bg-[#F8FAFC] z-[60] shadow-[-18px_0_40px_rgba(15,23,42,0.16)] flex flex-col">
+            <div className="px-5 py-4 bg-white flex items-center justify-between shadow-[0_1px_0_rgba(226,232,240,0.8)]">
+              <div>
+                <p className="text-[18px] font-bold text-[#0F172A] leading-tight">Your Cart</p>
+                <p className="text-[12px] text-[#64748B] mt-0.5">{cartSummary.itemCount} service item{cartSummary.itemCount > 1 ? 's' : ''}</p>
+              </div>
+              <button
+                onClick={() => setIsCartDrawerOpen(false)}
+                className="w-8 h-8 rounded-lg bg-[#F1F5F9] text-[#334155] hover:bg-[#E2E8F0] flex items-center justify-center"
+                aria-label="Close cart"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 bg-[#FFF7ED] shadow-[0_1px_0_rgba(254,215,170,0.7)]">
+              <p className="text-[13px] text-[#9A3412] font-semibold">Sevam Promise</p>
+              <p className="text-[12px] text-[#C2410C] mt-1">Verified professionals, transparent pricing, and doorstep support.</p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {cartItems.map((item) => (
+                <div key={item.id} className="rounded-xl bg-white p-3 shadow-[0_1px_8px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-semibold text-[#0F172A] truncate">{item.name}</p>
+                      <p className="text-[12px] text-[#64748B] mt-0.5">{item.categoryName ?? 'Service'}{item.duration ? ` • ${item.duration}` : ''}</p>
+                    </div>
+                    <p className="text-[14px] font-bold text-[#0F172A]">₹{Math.round(item.price * item.quantity)}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3">
+                    <p className="text-[12px] text-[#64748B]">₹{Math.round(item.price)} each</p>
+                    <div className="inline-flex items-center rounded-lg bg-[#FFF7ED] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]">
+                      <button
+                        onClick={() => handleUpdateCartQty(item.id, -1)}
+                        className="w-8 h-8 inline-flex items-center justify-center text-[#C2410C] hover:bg-[#FFEDD5]"
+                        aria-label={`Decrease quantity for ${item.name}`}
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-8 text-center text-[13px] font-bold text-[#9A3412]">{item.quantity}</span>
+                      <button
+                        onClick={() => handleUpdateCartQty(item.id, 1)}
+                        className="w-8 h-8 inline-flex items-center justify-center text-[#C2410C] hover:bg-[#FFEDD5]"
+                        aria-label={`Increase quantity for ${item.name}`}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white p-4 space-y-3 shadow-[0_-1px_0_rgba(226,232,240,0.8)]">
+              <div className="rounded-xl p-3 bg-[#F8FAFC]">
+                <div className="flex items-center justify-between text-[13px] text-[#475569]">
+                  <span>Subtotal</span>
+                  <span>₹{Math.round(calculateCartSummary(cartItems).subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[13px] text-[#475569] mt-2">
+                  <span>Platform fee</span>
+                  <span>₹50</span>
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#E5EAF1]">
+                  <span className="text-[14px] font-semibold text-[#0F172A]">Total</span>
+                  <span className="text-[18px] font-bold text-[#0F172A]">₹{Math.round(cartSummary.total)}</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-[#F8FAFC] p-3">
+                <p className="text-[12px] text-[#64748B]">Delivery Address</p>
+                <p className="text-[13px] font-semibold text-[#0F172A] mt-1 truncate">{selectedCheckoutAddress?.line ?? selectedLocation?.name ?? 'Choose where we should deliver'}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => router.push('/customer/profile')}
+                  className="h-11 rounded-xl bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#1D4ED8] font-semibold text-[13px] transition-colors"
+                >
+                  Add Address
+                </button>
+                <button
+                  onClick={openAddressSelector}
+                  className="h-11 rounded-xl bg-[#FC8019] hover:bg-[#EA580C] text-white font-bold text-[13px] transition-colors"
+                >
+                  Select Address
+                </button>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {isAddressSelectModalOpen && (
+        <div className="fixed inset-0 bg-black/45 z-[70]" onClick={() => setIsAddressSelectModalOpen(false)}>
+          <div className="absolute left-1/2 top-1/2 w-[min(560px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-[0_24px_64px_rgba(15,23,42,0.25)]" onClick={(event) => event.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
+              <div>
+                <p className="text-[18px] font-bold text-[#0F172A]">Choose Delivery Address</p>
+                <p className="text-[12px] text-[#64748B] mt-0.5">Select one address to continue payment</p>
+              </div>
+              <button
+                onClick={() => setIsAddressSelectModalOpen(false)}
+                className="w-8 h-8 rounded-lg bg-[#F1F5F9] text-[#334155] hover:bg-[#E2E8F0] flex items-center justify-center"
+                aria-label="Close address selector"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 max-h-[52vh] overflow-y-auto space-y-2">
+              {checkoutAddressLoading && <p className="text-[13px] text-[#64748B]">Loading addresses...</p>}
+              {!checkoutAddressLoading && checkoutAddresses.length === 0 && (
+                <p className="text-[13px] text-[#64748B]">No addresses found. Please add one from profile.</p>
+              )}
+              {!checkoutAddressLoading && checkoutAddresses.map((address) => {
+                const isActive = selectedCheckoutAddressId === address.id;
+                return (
+                  <button
+                    key={address.id}
+                    onClick={() => setSelectedCheckoutAddressId(address.id)}
+                    className={`w-full text-left rounded-xl p-3 border transition-colors ${isActive ? 'border-[#FDBA74] bg-[#FFF7ED]' : 'border-[#E2E8F0] bg-white hover:bg-[#F8FAFC]'}`}
+                  >
+                    <p className="text-[12px] font-semibold text-[#475569]">{address.label}</p>
+                    <p className="text-[14px] font-semibold text-[#0F172A] mt-1">{address.line}</p>
+                    <p className="text-[12px] text-[#64748B] mt-1">{address.eta}</p>
+                  </button>
+                );
+              })}
+              {checkoutAddressError && <p className="text-[12px] text-[#DC2626]">{checkoutAddressError}</p>}
+            </div>
+
+            <div className="px-4 py-3 border-t border-[#E2E8F0] grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setIsAddressSelectModalOpen(false)}
+                className="h-11 rounded-xl bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#334155] font-semibold text-[13px]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleProceedToPayment}
+                className="h-11 rounded-xl bg-[#FC8019] hover:bg-[#EA580C] text-white font-bold text-[13px]"
+              >
+                Continue to Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Location Modal */}
       {isLocationModalOpen && (

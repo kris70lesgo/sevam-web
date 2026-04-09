@@ -6,9 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { Clock } from "lucide-react";
 import Navbar from "@/components/dashboardnavbar";
 import type { CatalogService, ServiceCatalogApiResponse } from "@/types/service-catalog";
+import { clearCartRaw, readCartRaw, syncCartRawToServer, writeCartRaw } from "@/lib/utils/cart-storage";
 
 const CATALOG_CACHE_KEY = "sevam_catalog_cache_v1";
-const CART_STORAGE_KEY = "sevam_service_cart";
 
 type SearchService = {
   id: string;
@@ -35,31 +35,43 @@ export default function CustomerSearchPage() {
   const [services, setServices] = useState<SearchService[]>([]);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartHydrated, setCartHydrated] = useState(false);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      const raw = readCartRaw();
       if (!raw) return;
 
       const parsed = JSON.parse(raw) as CartItem[];
       if (!Array.isArray(parsed)) return;
 
-      const safeCart = parsed.filter((item) =>
-        Boolean(item?.id) &&
-        Boolean(item?.name) &&
-        Number.isFinite(item?.price) &&
-        Number.isFinite(item?.quantity)
-      );
+      const safeCart = parsed
+        .map((item) => ({
+          ...item,
+          price: Number(item?.price ?? 0),
+          quantity: Number(item?.quantity ?? 0),
+        }))
+        .filter((item) =>
+          Boolean(item?.id) &&
+          Boolean(item?.name) &&
+          Number.isFinite(item?.price) &&
+          Number.isFinite(item?.quantity)
+        );
       setCart(safeCart);
     } catch {
-      localStorage.removeItem(CART_STORAGE_KEY);
+      clearCartRaw();
+    } finally {
+      setCartHydrated(true);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    if (!cartHydrated) return;
+    const raw = JSON.stringify(cart);
+    writeCartRaw(raw);
+    void syncCartRawToServer(raw);
     window.dispatchEvent(new Event("sevam-cart-updated"));
-  }, [cart]);
+  }, [cart, cartHydrated]);
 
   useEffect(() => {
     let isMounted = true;

@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/dashboardnavbar';
 import type { ServiceCatalogApiResponse } from '@/types/service-catalog';
+import { clearCartRaw, readCartRaw, syncCartRawToServer, writeCartRaw } from '@/lib/utils/cart-storage';
 
-const CART_STORAGE_KEY = 'sevam_service_cart';
 const CATALOG_CACHE_KEY = 'sevam_catalog_cache_v1';
 
 interface SubService {
@@ -80,33 +80,45 @@ export default function ServicesPage() {
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartHydrated, setCartHydrated] = useState(false);
   const [popup, setPopup] = useState<{ service: SubService; categoryName: string } | null>(null);
   const queryHandledRef = useRef(false);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      const raw = readCartRaw();
       if (!raw) return;
 
       const parsed = JSON.parse(raw) as CartItem[];
       if (!Array.isArray(parsed)) return;
 
-      const safeCart = parsed.filter((item) =>
-        Boolean(item?.id) &&
-        Boolean(item?.name) &&
-        Number.isFinite(item?.price) &&
-        Number.isFinite(item?.quantity)
-      );
+      const safeCart = parsed
+        .map((item) => ({
+          ...item,
+          price: Number(item?.price ?? 0),
+          quantity: Number(item?.quantity ?? 0),
+        }))
+        .filter((item) =>
+          Boolean(item?.id) &&
+          Boolean(item?.name) &&
+          Number.isFinite(item?.price) &&
+          Number.isFinite(item?.quantity)
+        );
       setCart(safeCart);
     } catch {
-      localStorage.removeItem(CART_STORAGE_KEY);
+      clearCartRaw();
+    } finally {
+      setCartHydrated(true);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    if (!cartHydrated) return;
+    const raw = JSON.stringify(cart);
+    writeCartRaw(raw);
+    void syncCartRawToServer(raw);
     window.dispatchEvent(new Event('sevam-cart-updated'));
-  }, [cart]);
+  }, [cart, cartHydrated]);
 
   useEffect(() => {
     let isMounted = true;
@@ -342,12 +354,12 @@ export default function ServicesPage() {
           </div>
         )}
 
-        <aside style={{ width: 196, background: '#ffffff', border: '1px solid #D1D5DB', borderRadius: 24, position: 'sticky', top: 102, maxHeight: 'calc(100vh - 118px)', overflow: 'auto', flexShrink: 0, alignSelf: 'flex-start' }}>
-          <div style={{ padding: '16px 10px', overflow: 'hidden' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.12em', textTransform: 'uppercase' as const, marginBottom: 10, paddingLeft: 8 }}>
+        <aside style={{ width: 88, background: '#ffffff', border: '1px solid #D1D5DB', borderRadius: 24, position: 'sticky', top: 102, maxHeight: 'calc(100vh - 118px)', overflow: 'auto', flexShrink: 0, alignSelf: 'flex-start' }}>
+          <div style={{ padding: '10px 0px', overflow: 'hidden' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, textAlign: 'center' }}>
               Categories
             </p>
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
               {sidebarItems.map((item) => {
                 const Icon = item.iconKey === 'LayoutGrid' ? LayoutGrid : (ICON_MAP[item.iconKey] ?? LayoutGrid);
                 const active = selectedCategory === item.id;
@@ -355,14 +367,44 @@ export default function ServicesPage() {
                   <button
                     key={item.id}
                     onClick={() => setSelectedCategory(item.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? '#FFF7ED' : 'transparent', transition: 'all 0.15s', width: '100%', textAlign: 'left' as const }}
-                    onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = '#F8FAFC'; }}
-                    onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '7px 0 4px 0',
+                      borderRadius: 12,
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: active ? '#FFF7ED' : '#fff',
+                      boxShadow: active ? '0 1px 4px rgba(249,115,22,0.10)' : '0 1px 2px rgba(0,0,0,0.03)',
+                      width: 62,
+                      margin: '0 auto',
+                      transition: 'all 0.15s',
+                    }}
                   >
-                    <div style={{ width: 30, height: 30, borderRadius: 8, background: active ? item.color : '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Icon style={{ width: 14, height: 14, color: active ? '#fff' : '#1A3C6E' }} />
+                    <div style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: active ? item.color : '#F3F4F6',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 2,
+                      boxShadow: active ? '0 1px 4px rgba(0,0,0,0.08)' : undefined,
+                    }}>
+                      <Icon style={{ width: 16, height: 16, color: active ? '#fff' : '#1A3C6E' }} />
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: active ? 700 : 400, color: active ? '#F97316' : '#475569' }}>
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: active ? 700 : 500,
+                      color: active ? '#222' : '#475569',
+                      textAlign: 'center',
+                      lineHeight: 1.1,
+                      marginTop: 1,
+                      letterSpacing: 0.01,
+                    }}>
                       {item.name}
                     </span>
                   </button>

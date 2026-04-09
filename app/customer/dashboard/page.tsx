@@ -229,7 +229,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-white font-[family-name:var(--font-pt-sans-narrow)]">
+    <div className="min-h-screen bg-white font-[family-name:var(--font-geist-sans)]">
       <Navbar />
       <main className="max-w-[1280px] mx-auto px-4 lg:px-12 py-4 md:py-8">
         {/* Desktop Content */}
@@ -257,9 +257,9 @@ export default function App() {
         </div>
 
         {/* Promo Banners */}
-        <div className="grid grid-cols-4 gap-6 mb-10">
+        <div className="grid grid-cols-3 gap-1 mb-10">
           {/* Promo 1 */}
-          <div className="h-[210px] bg-[#00c6ba] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div className="h-[210px] w-full bg-[#00c6ba] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
             <div className="z-10">
               <h2 className="text-white text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight">Salon-Quality Beauty<br/>at Home</h2>
               
@@ -272,7 +272,7 @@ export default function App() {
           </div>
 
           {/* Promo 2 */}
-          <div className="h-[210px] bg-[#f8cb46] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div className="h-[210px] w-full bg-[#f8cb46] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
             <div className="z-10">
               <h2 className="text-gray-900 text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight">Expert Home<br/>Repairs</h2>
               <p className="text-gray-800 text-[15px] font-medium">Plumbing, electrical & cleaning services</p>
@@ -285,7 +285,7 @@ export default function App() {
           </div>
 
           {/* Promo 3 */}
-          <div className="h-[210px] bg-[#d5dce4] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          <div className="h-[210px] w-full bg-[#d5dce4] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
             <div className="z-10">
               <h2 className="text-gray-900 text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight">Spa &<br/>Wellness</h2>
               <p className="text-gray-800 text-[15px] font-medium">Massage therapy & relaxation at home</p>

@@ -11,6 +11,7 @@ import Navbar from '@/components/dashboardnavbar';
 import { supabase } from '@/lib/db/supabase';
 
 const PROFILE_STORAGE_KEY = 'sevam_profile';
+const LOCATION_STORAGE_KEY = 'sevam_selected_location';
 
 type AddressLabel = 'HOME' | 'OFFICE' | 'OTHER';
 
@@ -61,32 +62,11 @@ type PastOrderCard = {
   totalPaid: string;
 };
 
-const FALLBACK_ADDRESSES: AddressCard[] = [
-  {
-    id: 'fallback-home',
-    type: 'Home',
-    label: 'HOME',
-    address: 'A-204, Skyline Apartments, Koramangala, 4th Block',
-    city: 'Bengaluru - 560034',
-    isDefault: true,
-  },
-  {
-    id: 'fallback-office',
-    type: 'Office',
-    label: 'OFFICE',
-    address: 'WeWork Galaxy, Level 8, Residency Road',
-    city: 'Bengaluru - 560025',
-    isDefault: false,
-  },
-  {
-    id: 'fallback-other',
-    type: 'Other',
-    label: 'OTHER',
-    address: 'Brigade Gateway, Flat 5C, Rajajinagar',
-    city: 'Bengaluru - 560010',
-    isDefault: false,
-  },
-];
+type LocationResult = {
+  name: string;
+  lat: number;
+  lng: number;
+};
 
 function cleanPhone(phone?: string) {
   const value = (phone ?? '').trim();
@@ -138,10 +118,17 @@ export default function ProfilePage() {
   const [contactMsg, setContactMsg] = useState('');
   const [contactErr, setContactErr] = useState('');
   const [contactLoading, setContactLoading] = useState(false);
-  const [addresses, setAddresses] = useState<AddressCard[]>(FALLBACK_ADDRESSES);
+  const [addresses, setAddresses] = useState<AddressCard[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
   const [addressesMsg, setAddressesMsg] = useState('');
   const [addressesErr, setAddressesErr] = useState('');
+  const [isAddAddressModalOpen, setIsAddAddressModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<LocationResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<LocationResult | null>(null);
   const [pastOrders, setPastOrders] = useState<PastOrderCard[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -190,9 +177,34 @@ export default function ProfilePage() {
 
     const payload = (await response.json()) as AddressesApiResponse;
     const mapped = (payload.addresses ?? []).map(mapAddressToCard);
-    if (mapped.length > 0) {
-      setAddresses(mapped);
-    }
+    setAddresses(mapped);
+  };
+
+  const persistSelectedLocation = (place: LocationResult) => {
+    setSelectedLocation(place);
+    localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(place));
+  };
+
+  const parseLocationToAddressPayload = (place: LocationResult) => {
+    const parts = place.name
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const pincodeMatch = place.name.match(/\b\d{6}\b/);
+
+    const line1 = parts[0] ?? place.name;
+    const city = (parts.length >= 3 ? parts[parts.length - 3] : parts[1] ?? 'Unknown City').replace(/\b\d{6}\b/g, '').trim() || 'Unknown City';
+    const state = (parts.length >= 2 ? parts[parts.length - 2] : 'Unknown State').replace(/\b\d{6}\b/g, '').trim() || 'Unknown State';
+    const pincode = pincodeMatch?.[0] ?? '000000';
+
+    return {
+      line1,
+      city,
+      state,
+      pincode,
+      lat: place.lat,
+      lng: place.lng,
+    };
   };
 
   useEffect(() => {
@@ -210,6 +222,20 @@ export default function ProfilePage() {
       }
     } catch {
       localStorage.removeItem(PROFILE_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as LocationResult;
+      if (parsed?.name && Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
+        setSelectedLocation(parsed);
+      }
+    } catch {
+      localStorage.removeItem(LOCATION_STORAGE_KEY);
     }
   }, []);
 
@@ -273,10 +299,7 @@ export default function ProfilePage() {
         if (isMounted && addressesResponse.ok) {
           const addressesData = (await addressesResponse.json()) as AddressesApiResponse;
           const mappedAddresses: AddressCard[] = (addressesData.addresses ?? []).map(mapAddressToCard);
-
-          if (mappedAddresses.length > 0) {
-            setAddresses(mappedAddresses);
-          }
+          setAddresses(mappedAddresses);
         }
 
         if (isMounted) {
@@ -317,6 +340,50 @@ export default function ProfilePage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAddAddressModalOpen) return;
+
+    const query = searchQuery.trim();
+    if (query.length < 3) {
+      setSearchResults([]);
+      setLocationError(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        setLocationError(null);
+
+        const response = await fetch(`/api/location/search?q=${encodeURIComponent(query)}`);
+        const data = (await response.json()) as LocationResult[] | { error?: string };
+
+        if (isCancelled) return;
+
+        if (!response.ok || !Array.isArray(data)) {
+          setSearchResults([]);
+          setLocationError('Could not fetch locations. Please try again.');
+          return;
+        }
+
+        setSearchResults(data);
+      } catch {
+        if (!isCancelled) {
+          setSearchResults([]);
+          setLocationError('Could not fetch locations. Please try again.');
+        }
+      } finally {
+        if (!isCancelled) setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [isAddAddressModalOpen, searchQuery]);
 
   const normalizePhone = (value: string) => {
     const trimmed = value.replace(/\s+/g, '').trim();
@@ -387,22 +454,71 @@ export default function ProfilePage() {
     }
   };
 
-  const handleQuickAddAddress = async () => {
+  const handleQuickAddAddress = () => {
+    setAddressesErr('');
+    setAddressesMsg('');
+    setLocationError(null);
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsAddAddressModalOpen(true);
+  };
+
+  const handleSelectLocation = (place: LocationResult) => {
+    persistSelectedLocation(place);
+    setLocationError(null);
+    setSearchQuery(place.name);
+    setSearchResults([]);
+  };
+
+  const handleDetectLocation = async () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported on this device.');
+      return;
+    }
+
+    setIsDetecting(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+
+          const response = await fetch(`/api/location/reverse?lat=${lat}&lng=${lng}`);
+          const data = (await response.json()) as LocationResult | { error?: string };
+
+          if (!response.ok || !("name" in data)) {
+            setLocationError('Could not detect location. Please try search.');
+            return;
+          }
+
+          persistSelectedLocation(data as LocationResult);
+          setSearchQuery('');
+          setSearchResults([]);
+        } catch {
+          setLocationError('Could not detect location. Please try search.');
+        } finally {
+          setIsDetecting(false);
+        }
+      },
+      () => {
+        setIsDetecting(false);
+        setLocationError('Location permission denied. Please search manually.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
+  const handleSaveLocationAsAddress = async () => {
     try {
       setAddressesErr('');
       setAddressesMsg('');
 
-      const line1 = window.prompt('Address line 1');
-      if (!line1?.trim()) return;
-
-      const city = window.prompt('City');
-      if (!city?.trim()) return;
-
-      const state = window.prompt('State');
-      if (!state?.trim()) return;
-
-      const pincode = window.prompt('Pincode');
-      if (!pincode?.trim()) return;
+      if (!selectedLocation) {
+        setAddressesErr('Please select a location first.');
+        return;
+      }
 
       const accessToken = await getAccessToken();
       if (!accessToken) {
@@ -410,6 +526,7 @@ export default function ProfilePage() {
         return;
       }
 
+      const parsed = parseLocationToAddressPayload(selectedLocation);
       const response = await fetch('/api/customer/addresses', {
         method: 'POST',
         headers: {
@@ -418,23 +535,28 @@ export default function ProfilePage() {
         },
         body: JSON.stringify({
           label: 'OTHER',
-          line1: line1.trim(),
-          city: city.trim(),
-          state: state.trim(),
-          pincode: pincode.trim(),
+          line1: parsed.line1,
+          city: parsed.city,
+          state: parsed.state,
+          pincode: parsed.pincode,
+          lat: parsed.lat,
+          lng: parsed.lng,
           isDefault: addresses.length === 0,
         }),
       });
 
       if (!response.ok) {
-        setAddressesErr('Unable to add address.');
+        setAddressesErr('Unable to save selected location as address.');
         return;
       }
 
       await refreshAddresses(accessToken);
-      setAddressesMsg('Address added.');
+      setAddressesMsg('Address added from selected location.');
+      setIsAddAddressModalOpen(false);
+      setSearchQuery('');
+      setSearchResults([]);
     } catch {
-      setAddressesErr('Unable to add address.');
+      setAddressesErr('Unable to save selected location as address.');
     }
   };
 
@@ -697,76 +819,43 @@ export default function ProfilePage() {
             {/* ── SAVED ADDRESSES ── */}
             {activeTab === 'saved-addresses' && (
               <>
-                <div style={S.sectionHeader}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={S.sectionIcon}><MapPin style={{ width: 20, height: 20, color: '#F97316' }} /></div>
-                    <div>
-                      <p style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>Saved Addresses</p>
-                      <p style={{ fontSize: 13, color: '#94A3B8' }}>Manage your delivery and service locations</p>
-                    </div>
-                  </div>
-                  <button style={S.btnPrimary} onClick={handleQuickAddAddress}><Plus style={{ width: 14, height: 14 }} /> Add Address</button>
+                <div style={{ padding: '32px 32px 0 32px', background: '#fff', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <h2 style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: 0 }}>Manage Addresses</h2>
+                  <button style={{ ...S.btnPrimary, fontSize: 15, padding: '10px 22px', borderRadius: 6 }} onClick={handleQuickAddAddress}><Plus style={{ width: 16, height: 16 }} /> Add Address</button>
                 </div>
-
-                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ padding: '36px 32px', background: '#fff', display: 'flex', gap: 28, flexWrap: 'wrap' }}>
                   {addressesLoading && (
-                    <p style={{ fontSize: 13, color: '#94A3B8' }}>Loading saved addresses...</p>
+                    <p style={{ fontSize: 15, color: '#94A3B8' }}>Loading saved addresses...</p>
                   )}
-                  {addressesMsg && <p style={{ fontSize: 13, color: '#16A34A' }}>{addressesMsg}</p>}
-                  {addressesErr && <p style={{ fontSize: 13, color: '#EF4444' }}>{addressesErr}</p>}
-
+                  {addressesMsg && <p style={{ fontSize: 15, color: '#16A34A' }}>{addressesMsg}</p>}
+                  {addressesErr && <p style={{ fontSize: 15, color: '#EF4444' }}>{addressesErr}</p>}
+                  {!addressesLoading && addresses.length === 0 && (
+                    <div style={{ width: '100%', border: '1px dashed #E5E7EB', borderRadius: 10, padding: '24px 18px', background: '#fff' }}>
+                      <p style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: 0 }}>No address</p>
+                    </div>
+                  )}
                   {addresses.map(addr => {
                     const Icon = addr.label === 'HOME' ? Home : addr.label === 'OFFICE' ? Briefcase : MapPinned;
                     return (
-                      <div key={addr.id}
-                        style={{ border: '1.5px solid #F1F5F9', borderRadius: 14, padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: 16, transition: 'all 0.15s' }}
-                        onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FED7AA'); (e.currentTarget.style.background = '#FFFBF7'); }}
-                        onMouseLeave={e => { (e.currentTarget.style.borderColor = '#F1F5F9'); (e.currentTarget.style.background = '#fff'); }}
-                      >
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <Icon style={{ width: 18, height: 18, color: '#F97316' }} />
+                      <div key={addr.id} style={{ minWidth: 220, maxWidth: 260, flex: 1, border: '1.5px solid #E5E7EB', borderRadius: 8, background: '#fff', boxShadow: '0 1px 4px rgba(16,30,54,0.03)', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 7, position: 'relative' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <Icon style={{ width: 16, height: 16, color: '#222', opacity: 0.7 }} />
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#222', marginRight: 6 }}>{addr.type}</span>
+                          {addr.isDefault && <span style={{ background: '#F8FAFC', color: '#F97316', border: '1px solid #FED7AA', fontSize: 10, fontWeight: 700, padding: '1.5px 8px', borderRadius: 16, marginLeft: 4 }}>Default</span>}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <p style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{addr.type}</p>
-                            {addr.isDefault && (
-                              <span style={{ background: '#FFF7ED', color: '#F97316', border: '1px solid #FED7AA', fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20 }}>Default</span>
-                            )}
-                          </div>
-                          <p style={{ fontSize: 13, color: '#374151', marginBottom: 2 }}>{addr.address}</p>
-                          <p style={{ fontSize: 12, color: '#94A3B8' }}>{addr.city}</p>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                          {!addr.isDefault && (
-                            <button
-                              style={{ fontSize: 12, fontWeight: 600, color: '#F97316', background: 'none', border: 'none', cursor: 'pointer' }}
-                              onClick={() => handleSetDefaultAddress(addr.id)}
-                            >
-                              Set Default
-                            </button>
-                          )}
-                          <button style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Edit style={{ width: 14, height: 14, color: '#94A3B8' }} />
+                        <div style={{ fontSize: 12, color: '#222', marginBottom: 1 }}>{addr.address}</div>
+                        <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>{addr.city}</div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 'auto' }}>
+                          <button style={{ color: '#FC8019', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => {/* TODO: Edit handler */}}>
+                            EDIT
                           </button>
-                          <button
-                            style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            onClick={() => handleDeleteAddress(addr.id)}
-                          >
-                            <Trash2 style={{ width: 14, height: 14, color: '#94A3B8' }} />
+                          <button style={{ color: '#EF4444', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => handleDeleteAddress(addr.id)}>
+                            DELETE
                           </button>
                         </div>
                       </div>
                     );
                   })}
-
-                  {/* Add new */}
-                  <button style={{ width: '100%', border: '2px dashed #E2E8F0', borderRadius: 14, padding: '20px', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#94A3B8', transition: 'all 0.15s' }}
-                    onClick={handleQuickAddAddress}
-                    onMouseEnter={e => { (e.currentTarget.style.borderColor = '#FDBA74'); (e.currentTarget.style.color = '#F97316'); }}
-                    onMouseLeave={e => { (e.currentTarget.style.borderColor = '#E2E8F0'); (e.currentTarget.style.color = '#94A3B8'); }}
-                  >
-                    <Plus style={{ width: 16, height: 16 }} /> Add a New Address
-                  </button>
                 </div>
               </>
             )}
@@ -941,6 +1030,93 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {isAddAddressModalOpen && (
+        <>
+          <div
+            onClick={() => setIsAddAddressModalOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.42)', zIndex: 70 }}
+          />
+          <div
+            style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(620px, calc(100vw - 32px))', background: '#fff', borderRadius: 14, boxShadow: '0 20px 48px rgba(15,23,42,0.22)', zIndex: 75, overflow: 'hidden' }}
+          >
+            <div style={{ padding: '16px 18px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: 0 }}>Add Address</p>
+                <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0 0' }}>Search on map or use your current location</p>
+              </div>
+              <button
+                onClick={() => setIsAddAddressModalOpen(false)}
+                style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                aria-label="Close add address modal"
+              >
+                <X style={{ width: 14, height: 14, color: '#334155' }} />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 18px 18px' }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={handleDetectLocation}
+                  disabled={isDetecting}
+                  style={{ ...S.btnOutline, borderRadius: 8, opacity: isDetecting ? 0.6 : 1 }}
+                >
+                  <MapPin style={{ width: 14, height: 14 }} />
+                  {isDetecting ? 'Detecting...' : 'Use Current Location'}
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search area, locality, landmark"
+                style={{ ...S.input, marginBottom: 10, borderRadius: 8 }}
+              />
+
+              {isSearching && <p style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>Searching locations...</p>}
+              {locationError && <p style={{ fontSize: 12, color: '#EF4444', marginBottom: 8 }}>{locationError}</p>}
+
+              {searchResults.length > 0 && (
+                <div style={{ border: '1px solid #E5E7EB', borderRadius: 8, marginBottom: 12, maxHeight: 230, overflowY: 'auto' }}>
+                  {searchResults.map((place, index) => (
+                    <button
+                      key={`${place.lat}-${place.lng}-${place.name}`}
+                      onClick={() => handleSelectLocation(place)}
+                      style={{ width: '100%', border: 'none', borderBottom: index === searchResults.length - 1 ? 'none' : '1px solid #F1F5F9', background: '#fff', textAlign: 'left', padding: '10px 12px', cursor: 'pointer', fontSize: 13, color: '#1F2937' }}
+                    >
+                      {place.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedLocation && (
+                <div style={{ border: '1px solid #FED7AA', background: '#FFF7ED', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#C2410C', margin: '0 0 4px 0' }}>Selected location</p>
+                  <p style={{ fontSize: 12, color: '#7C2D12', margin: 0 }}>{selectedLocation.name}</p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setIsAddAddressModalOpen(false)}
+                  style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #CBD5E1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveLocationAsAddress}
+                  disabled={!selectedLocation}
+                  style={{ ...S.btnPrimary, borderRadius: 8, opacity: selectedLocation ? 1 : 0.6 }}
+                >
+                  Save Address
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {isEditDrawerOpen && (
         <>
