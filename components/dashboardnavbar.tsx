@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Search, ShoppingCart, ChevronDown, X, Minus, Plus } from 'lucide-react';
 import { supabase } from '@/lib/db/supabase';
-import { readCartRaw, syncCartRawToServer, writeCartRaw } from '@/lib/utils/cart-storage';
+import { readCartRaw, syncCartRawToServer, writeCartRaw, CART_STORAGE_KEY } from '@/lib/utils/cart-storage';
 
 type LocationResult = {
   name: string;
@@ -551,7 +551,7 @@ export default function Navbar() {
           >
             <Link href="/customer/dashboard" aria-label="Go to home">
               <Image
-                src="/logo.png"
+                src="/logo2.png"
                 alt="Sevam"
                 width={130}
                 height={42}

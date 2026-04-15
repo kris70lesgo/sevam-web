@@ -4,16 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   HardHat, Wrench, Sparkles, Settings, Zap, ChefHat,
-  Scissors,
-  X, Star, Clock, LayoutGrid,
+  Scissors, LayoutGrid, Minus, Plus,
 } from 'lucide-react';
 import Navbar from '@/components/dashboardnavbar';
 import type { ServiceCatalogApiResponse } from '@/types/service-catalog';
 import { clearCartRaw, readCartRaw, syncCartRawToServer, writeCartRaw } from '@/lib/utils/cart-storage';
+import ServicePopup from './components/ServicePopup';
 
 const CATALOG_CACHE_KEY = 'sevam_catalog_cache_v1';
 
-interface SubService {
+export interface SubService {
   id: string;
   name: string;
   description: string;
@@ -41,13 +41,7 @@ interface CartItem extends SubService {
 }
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  HardHat,
-  Wrench,
-  Sparkles,
-  Settings,
-  Zap,
-  ChefHat,
-  Scissors,
+  HardHat, Wrench, Sparkles, Settings, Zap, ChefHat, Scissors,
 };
 
 const mapCatalogToCategories = (data: ServiceCatalogApiResponse): Category[] =>
@@ -72,6 +66,89 @@ const mapCatalogToCategories = (data: ServiceCatalogApiResponse): Category[] =>
     })),
   }));
 
+// Blinkit-style Compact Service Card Component
+function ServiceCard({
+  service,
+  quantity,
+  onAdd,
+  onUpdateQty,
+  onOpenPopup,
+}: {
+  service: SubService;
+  quantity: number;
+  onAdd: () => void;
+  onUpdateQty: (delta: number) => void;
+  onOpenPopup: () => void;
+}) {
+  const isInCart = quantity > 0;
+
+  return (
+    <div
+      className="group relative flex flex-col bg-white rounded-lg overflow-hidden cursor-pointer"
+      onClick={onOpenPopup}
+    >
+      {/* Image Container - Square aspect ratio like Blinkit */}
+      <div className="relative aspect-square bg-gray-50 overflow-hidden">
+        <img
+          src={service.image}
+          alt={service.name}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+        />
+
+      </div>
+
+      {/* Content - Compact spacing */}
+      <div className="flex flex-col flex-1 p-2 pt-1.5">
+        {/* Title - Max 2 lines with ellipsis */}
+        <h3 className="text-[13px] font-medium text-gray-900 leading-tight line-clamp-2 mb-2 min-h-[34px]">
+          {service.name}
+        </h3>
+
+        {/* Price and CTA in same row */}
+        <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+          {/* Price */}
+          <div className="flex flex-col">
+            <span className="text-[15px] font-bold text-gray-900">₹{service.price}</span>
+            <span className="text-[11px] text-gray-400 line-through">₹{Math.round(service.price * 1.3)}</span>
+          </div>
+
+          {/* ADD button or Stepper */}
+          {isInCart ? (
+            // Blinkit-style stepper - Blue colors
+            <div className="flex items-center justify-between h-7 w-20 bg-blue-50 border border-blue-500 rounded-md overflow-hidden">
+              <button
+                onClick={() => onUpdateQty(-1)}
+                className="flex items-center justify-center w-6 h-full text-blue-600 hover:bg-blue-100 transition-colors"
+              >
+                <Minus size={12} strokeWidth={2.5} />
+              </button>
+              <span className="flex items-center justify-center w-8 text-[12px] font-semibold text-gray-900">
+                {quantity}
+              </span>
+              <button
+                onClick={() => onUpdateQty(1)}
+                className="flex items-center justify-center w-6 h-full text-blue-600 hover:bg-blue-100 transition-colors"
+              >
+                <Plus size={12} strokeWidth={2.5} />
+              </button>
+            </div>
+          ) : (
+            // Compact ADD button - Blue colors
+            <button
+              onClick={onAdd}
+              className="h-7 px-3 flex items-center justify-center bg-blue-50 border border-blue-500 rounded-md text-[12px] font-semibold text-blue-700 hover:bg-blue-100 active:bg-blue-200 transition-all"
+            >
+              ADD
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ServicesPage() {
   const searchParams = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -81,29 +158,23 @@ export default function ServicesPage() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
-  const [popup, setPopup] = useState<{ service: SubService; categoryName: string } | null>(null);
+  const [popupService, setPopupService] = useState<SubService | null>(null);
   const queryHandledRef = useRef(false);
 
+  // Cart hydration
   useEffect(() => {
     try {
       const raw = readCartRaw();
       if (!raw) return;
-
       const parsed = JSON.parse(raw) as CartItem[];
       if (!Array.isArray(parsed)) return;
-
       const safeCart = parsed
         .map((item) => ({
           ...item,
           price: Number(item?.price ?? 0),
           quantity: Number(item?.quantity ?? 0),
         }))
-        .filter((item) =>
-          Boolean(item?.id) &&
-          Boolean(item?.name) &&
-          Number.isFinite(item?.price) &&
-          Number.isFinite(item?.quantity)
-        );
+        .filter((item) => Boolean(item?.id) && Boolean(item?.name) && Number.isFinite(item?.price) && Number.isFinite(item?.quantity));
       setCart(safeCart);
     } catch {
       clearCartRaw();
@@ -112,6 +183,7 @@ export default function ServicesPage() {
     }
   }, []);
 
+  // Sync cart to storage
   useEffect(() => {
     if (!cartHydrated) return;
     const raw = JSON.stringify(cart);
@@ -120,9 +192,11 @@ export default function ServicesPage() {
     window.dispatchEvent(new Event('sevam-cart-updated'));
   }, [cart, cartHydrated]);
 
+  // Load catalog with progressive loading strategy
   useEffect(() => {
     let isMounted = true;
 
+    // Try localStorage cache first (instant display)
     try {
       const raw = localStorage.getItem(CATALOG_CACHE_KEY);
       if (raw) {
@@ -139,23 +213,41 @@ export default function ServicesPage() {
 
     const loadCatalog = async () => {
       try {
-        const response = await fetch('/api/services/catalog', { cache: 'force-cache' });
+        // Use no-store to bypass browser cache and get fresh data
+        const response = await fetch('/api/services/catalog', {
+          cache: 'no-store',
+        });
+
         if (!response.ok) {
           throw new Error('Catalog request failed');
         }
 
         const data = (await response.json()) as ServiceCatalogApiResponse;
         if (!isMounted) return;
+
+        // Only update if data changed (prevents unnecessary re-renders)
+        const newCategories = mapCatalogToCategories(data);
+        setCategories((prev) => {
+          // Simple check: if same length, probably same data
+          if (prev.length === newCategories.length && prev.length > 0) {
+            return prev; // Keep existing to prevent flash
+          }
+          return newCategories;
+        });
+
+        // Update localStorage in background
         localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(data));
-
-        const mappedCategories = mapCatalogToCategories(data);
-
-        setCategories(mappedCategories);
         setCatalogError(null);
       } catch {
-        if (!isMounted) return;
-        setCategories([]);
-        setCatalogError('Unable to load services right now');
+        if (isMounted) {
+          // Don't clear categories on error if we have cached data
+          setCategories((prev) => {
+            if (prev.length === 0) {
+              setCatalogError('Unable to load services right now');
+            }
+            return prev;
+          });
+        }
       } finally {
         if (isMounted) {
           setCatalogLoading(false);
@@ -165,15 +257,12 @@ export default function ServicesPage() {
 
     loadCatalog();
 
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
+// Handle query params
   useEffect(() => {
-    if (queryHandledRef.current) return;
-    if (categories.length === 0) return;
-
+    if (queryHandledRef.current || categories.length === 0) return;
     const requestedServiceId = searchParams.get('serviceId');
     const requestedCategory = searchParams.get('category');
 
@@ -183,53 +272,39 @@ export default function ServicesPage() {
     }
 
     if (requestedCategory) {
-      const exists = categories.some((category) => category.slug === requestedCategory);
-      if (exists) {
-        setSelectedCategory(requestedCategory);
-      }
+      const exists = categories.some((cat) => cat.slug === requestedCategory);
+      if (exists) setSelectedCategory(requestedCategory);
     }
 
     if (requestedServiceId) {
       for (const category of categories) {
-        const matched = category.subcategories.find((service) => service.id === requestedServiceId);
+        const matched = category.subcategories.find((s) => s.id === requestedServiceId);
         if (matched) {
           setSelectedCategory(category.slug);
-          setPopup({ service: matched, categoryName: matched.categoryName });
+          setPopupService(matched);
           break;
         }
       }
     }
-
     queryHandledRef.current = true;
   }, [categories, searchParams]);
 
-  const sidebarItems = useMemo(
-    () => [
-      { id: 'all', name: 'All', iconKey: 'LayoutGrid', color: '#64748B', bg: '#F8FAFC' },
-      ...categories.map((category) => ({
-        id: category.slug,
-        name: category.name,
-        iconKey: category.iconKey,
-        color: category.color,
-        bg: category.bg,
-      })),
-    ],
-    [categories]
-  );
+  const sidebarItems = useMemo(() => [
+    { id: 'all', name: 'All', iconKey: 'LayoutGrid', color: '#64748B', bg: '#F8FAFC' },
+    ...categories.map((cat) => ({
+      id: cat.slug,
+      name: cat.name,
+      iconKey: cat.iconKey,
+      color: cat.color,
+      bg: cat.bg,
+    })),
+  ], [categories]);
 
-  const allServices = useMemo(
-    () => categories.flatMap((category) => category.subcategories),
-    [categories]
-  );
+  const allServices = useMemo(() => categories.flatMap((cat) => cat.subcategories), [categories]);
+  const currentCategory = useMemo(() => categories.find((cat) => cat.slug === selectedCategory), [categories, selectedCategory]);
+  const currentServices = selectedCategory === 'all' ? allServices : (currentCategory?.subcategories ?? []);
 
-  const currentCategory = useMemo(
-    () => categories.find((category) => category.slug === selectedCategory),
-    [categories, selectedCategory]
-  );
-
-  const currentServices = selectedCategory === 'all'
-    ? allServices
-    : (currentCategory?.subcategories ?? []);
+  const cartQty = (id: string) => cart.find((item) => item.id === id)?.quantity ?? 0;
 
   const addToCart = (service: SubService) => {
     setCart((prev) => {
@@ -246,312 +321,99 @@ export default function ServicesPage() {
   const updateQty = (id: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === id ? { ...item, quantity: item.quantity + delta } : item
-        )
+        .map((item) => (item.id === id ? { ...item, quantity: item.quantity + delta } : item))
         .filter((item) => item.quantity > 0)
     );
   };
 
-  const isInCart = (id: string) =>
-    cart.some((item) => item.id === id);
-
-  const cartQty = (id: string) =>
-    cart.find((item) => item.id === id)?.quantity ?? 0;
-
-  const openServicePopup = (service: SubService) => {
-    setPopup({ service, categoryName: service.categoryName });
-  };
-
-  const handlePopupAdd = (service: SubService) => {
-    addToCart(service);
-    setPopup(null);
-  };
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#F5F7FA', position: 'relative' }}>
+return (
+    <div className="h-screen bg-gray-50 overflow-hidden scrollbar-hide">
       <Navbar />
-      <div style={{ maxWidth: 1200, margin: '0 auto', width: '100%', padding: '0 32px', display: 'flex' }}>
-        {popup && (
-          <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-            onClick={() => setPopup(null)}
-          >
-            <div
-              style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 530, maxHeight: '92vh', overflow: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.28)', position: 'relative' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => setPopup(null)}
-                style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: '50%', background: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}
-              >
-                <X style={{ width: 18, height: 18, color: '#111827' }} />
-              </button>
 
-              <div style={{ position: 'relative', height: 260, overflow: 'hidden', borderRadius: '16px 16px 0 0' }}>
-                <img src={popup.service.image} alt={popup.service.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.2) 0%, transparent 50%)' }} />
-                <span style={{ position: 'absolute', bottom: 12, left: 14, background: 'rgba(0,0,0,0.58)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8 }}>
-                  {popup.categoryName}
-                </span>
-                <div style={{ position: 'absolute', bottom: 20, left: 16, right: 16, height: 4, background: 'rgba(255,255,255,0.95)', borderRadius: 999 }} />
-              </div>
+      {/* Popup Modal */}
+      {popupService && (
+        <ServicePopup
+          service={popupService}
+          quantity={cartQty(popupService.id)}
+          onClose={() => setPopupService(null)}
+          onAdd={() => addToCart(popupService)}
+          onUpdateQty={(delta) => updateQty(popupService.id, delta)}
+        />
+      )}
 
-              <div style={{ padding: '16px 14px 14px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <h2 style={{ fontSize: 22, fontWeight: 800, color: '#111827', lineHeight: 1.2, marginBottom: 6 }}>{popup.service.name}</h2>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <Star style={{ width: 13, height: 13, color: '#4B5563', fill: '#4B5563' }} />
-                      <span style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>{popup.service.rating.toFixed(2)}</span>
-                      <span style={{ fontSize: 14, color: '#9CA3AF' }}>({popup.service.reviews} reviews)</span>
-                    </div>
+      <div className="max-w-[1200px] mx-auto h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+        {/* Header - Fixed */}
+        <div className="bg-white flex-shrink-0">
+          <h1 className="text-lg font-bold text-gray-900 py-3 px-4">
+            {selectedCategory === 'all' ? 'All Services' : currentCategory?.name}
+          </h1>
+        </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <span style={{ fontSize: 32, fontWeight: 800, color: '#111827' }}>₹{popup.service.price}</span>
-                      <span style={{ fontSize: 18, color: '#9CA3AF', textDecoration: 'line-through' }}>₹{Math.round(popup.service.price * 1.3)}</span>
-                      <span style={{ fontSize: 18, color: '#6B7280' }}>•</span>
-                      <span style={{ fontSize: 18, color: '#6B7280' }}>{popup.service.duration}</span>
-                    </div>
-
-                    <div style={{ fontSize: 16, color: '#0E8A4B', fontWeight: 600 }}>🏷 ₹{Math.round(popup.service.price / 2)} per bathroom</div>
-                  </div>
-
-                  <button
-                    onClick={() => handlePopupAdd(popup.service)}
-                    style={{ minWidth: 82, height: 34, padding: '0 18px', borderRadius: 10, border: '1px solid #D1D5DB', background: '#fff', color: '#6D5EFC', fontSize: 16, fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ background: '#F3F4F6', padding: '16px 16px 18px 16px', borderTop: '1px solid #E5E7EB' }}>
-                <h3 style={{ fontSize: 24, fontWeight: 800, color: '#111827', marginBottom: 12 }}>See the difference yourself</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  {[0, 1].map((index) => (
-                    <div key={index} style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', border: '1px solid #E5E7EB' }}>
-                      <div style={{ position: 'relative', height: 120 }}>
-                        <img src={popup.service.image} alt={`${popup.service.name} before after`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', border: '1px solid rgba(255,255,255,0.8)', borderRadius: 8, overflow: 'hidden', backdropFilter: 'blur(2px)' }}>
-                          <span style={{ padding: '4px 10px', fontSize: 12, color: '#fff', background: 'rgba(0,0,0,0.3)' }}>Before</span>
-                          <span style={{ padding: '4px 10px', fontSize: 12, color: '#fff', background: 'rgba(255,255,255,0.2)' }}>After</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {popup.service.process && popup.service.process.length > 0 && (
-                  <ul style={{ marginTop: 14, paddingLeft: 18, color: '#4B5563', fontSize: 13, lineHeight: 1.6 }}>
-                    {popup.service.process.slice(0, 3).map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <aside style={{ width: 88, background: '#ffffff', border: '1px solid #D1D5DB', borderRadius: 24, position: 'sticky', top: 102, maxHeight: 'calc(100vh - 118px)', overflow: 'auto', flexShrink: 0, alignSelf: 'flex-start' }}>
-          <div style={{ padding: '10px 0px', overflow: 'hidden' }}>
-            <p style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10, textAlign: 'center' }}>
-              Categories
-            </p>
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar - Categories - Fixed, no scroll */}
+          <aside className="w-20 lg:w-24 bg-white flex-shrink-0 overflow-hidden">
+            <nav className="flex flex-col py-2">
               {sidebarItems.map((item) => {
-                const Icon = item.iconKey === 'LayoutGrid' ? LayoutGrid : (ICON_MAP[item.iconKey] ?? LayoutGrid);
+                const Icon = item.iconKey === 'LayoutGrid' ? LayoutGrid : ICON_MAP[item.iconKey] ?? LayoutGrid;
                 const active = selectedCategory === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => setSelectedCategory(item.id)}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '7px 0 4px 0',
-                      borderRadius: 12,
-                      border: 'none',
-                      cursor: 'pointer',
-                      background: active ? '#FFF7ED' : '#fff',
-                      boxShadow: active ? '0 1px 4px rgba(249,115,22,0.10)' : '0 1px 2px rgba(0,0,0,0.03)',
-                      width: 62,
-                      margin: '0 auto',
-                      transition: 'all 0.15s',
-                    }}
+                    className={`flex flex-col items-center gap-1 py-3 px-1 transition-colors ${
+                      active ? 'bg-orange-50' : 'hover:bg-gray-50'
+                    }`}
                   >
-                    <div style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 10,
-                      background: active ? item.color : '#F3F4F6',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginBottom: 2,
-                      boxShadow: active ? '0 1px 4px rgba(0,0,0,0.08)' : undefined,
-                    }}>
-                      <Icon style={{ width: 16, height: 16, color: active ? '#fff' : '#1A3C6E' }} />
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                        active ? 'bg-orange-500 shadow-sm' : 'bg-gray-100'
+                      }`}
+                    >
+                      <Icon size={18} className={active ? 'text-white' : 'text-gray-600'} />
                     </div>
-                    <span style={{
-                      fontSize: 11,
-                      fontWeight: active ? 700 : 500,
-                      color: active ? '#222' : '#475569',
-                      textAlign: 'center',
-                      lineHeight: 1.1,
-                      marginTop: 1,
-                      letterSpacing: 0.01,
-                    }}>
+                    <span className={`text-[10px] font-medium text-center leading-tight px-1 ${active ? 'text-gray-900' : 'text-gray-600'}`}>
                       {item.name}
                     </span>
                   </button>
                 );
               })}
             </nav>
-          </div>
-        </aside>
+          </aside>
 
-        <main style={{ flex: 1, overflow: 'auto', padding: '28px 32px', background: '#ffffff', borderRadius: 32, minHeight: '78vh' }}>
-          <div style={{ marginBottom: 24 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1A3C6E', marginBottom: 3 }}>
-              {selectedCategory === 'all' ? 'All Services' : `${currentCategory?.name ?? 'All'} Services`}
-            </h1>
-            <p style={{ fontSize: 13, color: '#94A3B8' }}>{currentServices.length} services available</p>
-          </div>
+          {/* Main Content - Scrollable grid only */}
+          <main className="flex-1 px-3 py-2 overflow-y-auto scrollbar-hide">
 
-          {catalogLoading ? (
-            <div style={{ textAlign: 'center', padding: '80px 0', color: '#64748B', fontSize: 14 }}>Loading services...</div>
-          ) : catalogError ? (
-            <div style={{ textAlign: 'center', padding: '80px 0' }}>
-              <p style={{ fontSize: 16, fontWeight: 700, color: '#1A3C6E', marginBottom: 4 }}>{catalogError}</p>
-              <p style={{ fontSize: 13, color: '#94A3B8' }}>Please refresh and try again</p>
-            </div>
-          ) : currentServices.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '80px 0' }}>
-              <p style={{ fontSize: 16, fontWeight: 700, color: '#1A3C6E', marginBottom: 4 }}>No services found</p>
-              <p style={{ fontSize: 13, color: '#94A3B8' }}>Try a different search or category</p>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 22 }}>
-              {currentServices.map((service) => (
-                <div
-                  key={service.id}
-                  style={{ cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', width: '100%' }}
-                  onClick={() => openServicePopup(service)}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-                >
-                  <div style={{ position: 'relative', aspectRatio: '4 / 3', overflow: 'visible' }}>
-                    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#F1F5F9', borderRadius: 18 }}>
-                      <img src={service.image} alt={service.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.2) 0%, transparent 55%)' }} />
-                      {service.duration && (
-                        <span style={{ position: 'absolute', bottom: 8, left: 10, background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 10, padding: '3px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <Clock style={{ width: 10, height: 10 }} />{service.duration}
-                        </span>
-                      )}
-                    </div>
-
-                    {isInCart(service.id) ? (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          bottom: -18,
-                          transform: 'translateX(-50%)',
-                          minWidth: 100,
-                          height: 36,
-                          padding: '0 14px',
-                          borderRadius: 10,
-                          border: '2px solid #93C5FD',
-                          background: '#fff',
-                          color: '#2563EB',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          zIndex: 2,
-                          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          gap: 12,
-                        }}
-                      >
-                        <button
-                          onClick={() => updateQty(service.id, -1)}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: '#2563EB',
-                            cursor: 'pointer',
-                            fontSize: 22,
-                            lineHeight: 1,
-                            padding: 0,
-                          }}
-                        >
-                          −
-                        </button>
-                        <span style={{ minWidth: 12, textAlign: 'center' as const }}>{cartQty(service.id)}</span>
-                        <button
-                          onClick={() => updateQty(service.id, 1)}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: '#2563EB',
-                            cursor: 'pointer',
-                            fontSize: 22,
-                            lineHeight: 1,
-                            padding: 0,
-                          }}
-                        >
-                          +
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openServicePopup(service); }}
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          bottom: -18,
-                          transform: 'translateX(-50%)',
-                          minWidth: 100,
-                          height: 36,
-                          padding: '0 16px',
-                          borderRadius: 10,
-                          border: '2px solid #93C5FD',
-                          background: '#fff',
-                          color: '#2563EB',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          zIndex: 2,
-                          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-                          fontSize: 14,
-                          fontWeight: 700,
-                        }}
-                      >
-                        Add
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={{ padding: '30px 6px 0 6px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: '#1A3C6E', marginBottom: 3, lineHeight: 1.3 }}>{service.name}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                      <span style={{ fontSize: 17, fontWeight: 800, color: '#F97316' }}>₹{service.price}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
+            {/* Loading / Error States */}
+            {catalogLoading ? (
+              <div className="text-center py-20 text-gray-500 text-sm">Loading services...</div>
+            ) : catalogError ? (
+              <div className="text-center py-20">
+                <p className="text-base font-semibold text-gray-900 mb-1">{catalogError}</p>
+                <p className="text-sm text-gray-500">Please refresh and try again</p>
+              </div>
+            ) : currentServices.length === 0 ? (
+              <div className="text-center py-20">
+                <p className="text-base font-semibold text-gray-900 mb-1">No services found</p>
+                <p className="text-sm text-gray-500">Try a different search or category</p>
+              </div>
+            ) : (
+              // Blinkit-style dense grid - 4-6 items per row
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-2 gap-y-1">
+                {currentServices.map((service) => (
+                  <ServiceCard
+                    key={service.id}
+                    service={service}
+                    quantity={cartQty(service.id)}
+                    onAdd={() => addToCart(service)}
+                    onUpdateQty={(delta) => updateQty(service.id, delta)}
+                    onOpenPopup={() => setPopupService(service)}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+  </div>
   );
 }

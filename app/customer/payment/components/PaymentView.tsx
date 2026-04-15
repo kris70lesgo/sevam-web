@@ -10,6 +10,9 @@ type PaymentViewProps = {
   useWallet: boolean;
   onToggleWallet: () => void;
   onPay: () => void;
+  onPayOnline: () => void;
+  isPayingOnline?: boolean;
+  paymentError?: string | null;
 };
 
 export default function PaymentView({
@@ -22,6 +25,9 @@ export default function PaymentView({
   useWallet,
   onToggleWallet,
   onPay,
+  onPayOnline,
+  isPayingOnline = false,
+  paymentError = null,
 }: PaymentViewProps) {
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-[#f0f2f5] pb-24">
@@ -97,6 +103,15 @@ export default function PaymentView({
           >
             Pay ₹{Math.round(total)} with Cash
           </button>
+          <button
+            onClick={onPayOnline}
+            disabled={isPayingOnline || total <= 0}
+            className="mt-2 h-11 w-full rounded-xl border border-[#0c51ff] bg-white text-sm font-bold text-[#0c51ff] transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPayingOnline ? 'Opening Razorpay...' : `Pay ₹${Math.round(total)} Online`}
+          </button>
+          <p className="mt-2 text-[11px] text-gray-500">Secure online payment powered by Razorpay.</p>
+          {paymentError && <p className="mt-1 text-[11px] text-red-600">{paymentError}</p>}
         </div>
       </div>
 

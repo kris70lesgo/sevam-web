@@ -142,6 +142,20 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+    const CATALOG_CACHE_KEY = 'sevam_catalog_cache_v1';
+
+    // Try localStorage cache first for instant display
+    try {
+      const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw) as ServiceCatalogApiResponse;
+        if (cached?.categories?.length > 0) {
+          setCatalog(cached);
+        }
+      }
+    } catch {
+      localStorage.removeItem(CATALOG_CACHE_KEY);
+    }
 
     const loadCatalog = async () => {
       try {
@@ -151,11 +165,20 @@ export default function App() {
         }
 
         const data = (await response.json()) as ServiceCatalogApiResponse;
-        if (isMounted) {
-          setCatalog(data);
-        }
+        if (!isMounted) return;
+
+        // Only update if different to prevent flash
+        setCatalog((prev) => {
+          if (prev?.categories?.length === data.categories?.length && prev) {
+            return prev;
+          }
+          // Update cache in background
+          localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(data));
+          return data;
+        });
       } catch {
-        if (isMounted) {
+        // Keep cached data on error
+        if (isMounted && !catalog) {
           setCatalog(null);
         }
       }
@@ -234,67 +257,107 @@ export default function App() {
       <main className="max-w-[1280px] mx-auto px-4 lg:px-12 py-4 md:py-8">
         {/* Desktop Content */}
         <div className="hidden lg:block">
-          {/* Hero Banner */}
-        <div className="w-full h-[260px] bg-[#227439] rounded-2xl p-10 flex items-center relative overflow-hidden mb-8">
+        {/* Hero Banner with Background Image */}
+        <div className="w-full h-[260px] rounded-2xl p-10 flex items-center relative overflow-hidden mb-8">
+          {/* Background Image */}
+          <div className="absolute inset-0">
+            <Image
+              src="/homepage/mainbanner.jpg"
+              alt="Home services background"
+              fill
+              priority
+              className="object-cover"
+              sizes="1280px"
+            />
+          </div>
           <div className="z-10 w-2/3">
-            <h1 className="text-white text-[44px] font-extrabold leading-[1.1] mb-4 tracking-tight">
+            <h1 className="text-gray-800 text-[44px] font-extrabold leading-[1.1] mb-4 tracking-tight drop-shadow-sm">
               India&#39;s #1 Home Services Platform
             </h1>
-            <p className="text-white text-[22px] mb-8 font-medium">
+            <p className="text-white text-[22px] mb-8 font-medium drop-shadow-sm">
               Your Home, Perfectly Serviced<br/>From expert repairs to luxury spa treatments —<br/>Book trusted professionals in 60 seconds.
             </p>
-            <button className="bg-white text-black px-6 py-3 rounded-lg font-bold text-[16px] hover:bg-gray-100 transition-colors">
+            <button
+              onClick={() => router.push('/customer/services')}
+              className="bg-white text-black px-6 py-3 rounded-lg font-bold text-[16px] hover:bg-gray-100 transition-colors shadow-lg"
+            >
               Book Service Now
             </button>
-          </div>
-          {/* Image Placeholder */}
-          <div className="absolute right-0 top-0 bottom-0 w-[45%] bg-[#2a8b44] rounded-l-full transform translate-x-16 flex items-center justify-center">
-            {/* Decorative boxes representing the groceries */}
-            <div className="w-24 h-24 bg-[#34a853] rounded-xl absolute -left-4 top-12 rotate-12"></div>
-            <div className="w-32 h-32 bg-[#ea4335] rounded-full absolute left-16 bottom-8"></div>
-            <div className="w-20 h-32 bg-[#fbbc04] rounded-lg absolute right-24 top-16 -rotate-12"></div>
           </div>
         </div>
 
         {/* Promo Banners */}
         <div className="grid grid-cols-3 gap-1 mb-10">
-          {/* Promo 1 */}
-          <div className="h-[210px] w-full bg-[#00c6ba] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          {/* Promo 1 - Labour */}
+          <div className="h-[210px] w-full rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+            {/* Background Image */}
+            <Image
+              src="/homepage/services/subbanner1.png"
+              alt="Labour services"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 33vw"
+            />
+            {/* Dark overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30"></div>
             <div className="z-10">
-              <h2 className="text-white text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight">Salon-Quality Beauty<br/>at Home</h2>
-              
+              <h2 className="text-white text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight drop-shadow-md">Labour at your<br/>doorsteps !</h2>
+              <p className="text-white text-[15px] font-medium drop-shadow-sm">Masons, painters, movers & more</p>
             </div>
-            <button className="bg-white text-black px-5 py-2.5 rounded-lg font-bold w-max text-[14px] z-10 hover:bg-gray-100 transition-colors">Explore Services</button>
-            {/* Image Placeholder */}
-            <div className="absolute -right-4 -bottom-4 w-40 h-40 bg-[#00a89d] rounded-full flex items-center justify-center">
-              <div className="w-16 h-24 bg-[#008f85] rounded-md rotate-12"></div>
-            </div>
+            <button
+              onClick={() => router.push('/customer/services?category=labour')}
+              className="bg-[#333] text-white px-5 py-2.5 rounded-lg font-bold w-max text-[14px] z-10 hover:bg-black transition-colors shadow-lg"
+            >
+              Explore Services
+            </button>
           </div>
 
-          {/* Promo 2 */}
-          <div className="h-[210px] w-full bg-[#f8cb46] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          {/* Promo 2 - Chef/Cooking */}
+          <div className="h-[210px] w-full rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+            {/* Background Image */}
+            <Image
+              src="/homepage/services/subbanner2.png"
+              alt="Chef and cooking services"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 33vw"
+            />
+            {/* Dark overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30"></div>
             <div className="z-10">
-              <h2 className="text-gray-900 text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight">Expert Home<br/>Repairs</h2>
-              <p className="text-gray-800 text-[15px] font-medium">Plumbing, electrical & cleaning services</p>
+              <h2 className="text-white text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight drop-shadow-md">No time to cook ?</h2>
+              <p className="text-white text-[15px] font-medium drop-shadow-sm">Hire cooks, eat fresh daily</p>
             </div>
-            <button className="bg-[#333] text-white px-5 py-2.5 rounded-lg font-bold w-max text-[14px] z-10 hover:bg-black transition-colors">Explore Services</button>
-            {/* Image Placeholder */}
-            <div className="absolute -right-4 -bottom-4 w-40 h-40 bg-[#e5b833] rounded-full flex items-center justify-center">
-               <div className="w-20 h-20 bg-[#cca329] rounded-full"></div>
-            </div>
+            <button
+              onClick={() => router.push('/customer/services?category=chef')}
+              className="bg-[#333] text-white px-5 py-2.5 rounded-lg font-bold w-max text-[14px] z-10 hover:bg-black transition-colors shadow-lg"
+            >
+              Explore Services
+            </button>
           </div>
 
-          {/* Promo 3 */}
-          <div className="h-[210px] w-full bg-[#d5dce4] rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+          {/* Promo 3 - Grooming */}
+          <div className="h-[210px] w-full rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden">
+            {/* Background Image */}
+            <Image
+              src="/homepage/services/subbanner3.png"
+              alt="Grooming services"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, 33vw"
+            />
+            {/* Dark overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-black/30"></div>
             <div className="z-10">
-              <h2 className="text-gray-900 text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight">Spa &<br/>Wellness</h2>
-              <p className="text-gray-800 text-[15px] font-medium">Massage therapy & relaxation at home</p>
+              <h2 className="text-white text-[28px] font-extrabold leading-[1.1] mb-2 tracking-tight drop-shadow-md">Self care at home !</h2>
+              <p className="text-white text-[15px] font-medium drop-shadow-sm">Haircut, skincare, grooming etc</p>
             </div>
-            <button className="bg-[#333] text-white px-5 py-2.5 rounded-lg font-bold w-max text-[14px] z-10 hover:bg-black transition-colors">Explore Services</button>
-            {/* Image Placeholder */}
-            <div className="absolute -right-4 -bottom-4 w-40 h-40 bg-[#c2c9d1] rounded-full flex items-center justify-center">
-               <div className="w-24 h-16 bg-[#aeb6bf] rounded-xl -rotate-12"></div>
-            </div>
+            <button
+              onClick={() => router.push('/customer/services?category=grooming')}
+              className="bg-[#333] text-white px-5 py-2.5 rounded-lg font-bold w-max text-[14px] z-10 hover:bg-black transition-colors shadow-lg"
+            >
+              Explore Services
+            </button>
           </div>
         </div>
 
