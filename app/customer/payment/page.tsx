@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import CartView from './components/CartView';
 import CouponsView from './components/CouponsView';
 import PaymentView from './components/PaymentView';
@@ -52,8 +52,6 @@ function parseCouponDiscount(code: string, subtotal: number) {
 
 export default function PaymentPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const showDebug = searchParams.get('cartDebug') === '1';
   const [currentView, setCurrentView] = useState<CheckoutView>('cart');
   const [items, setItems] = useState<CartItem[]>([]);
   const [address, setAddress] = useState<CheckoutAddress | null>(null);
@@ -64,41 +62,6 @@ export default function PaymentPage() {
   const [showCouponPopup, setShowCouponPopup] = useState(false);
   const [isPayingOnline, setIsPayingOnline] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [backendSummary, setBackendSummary] = useState<{
-    itemCount: number;
-    subtotal: number;
-    handlingFee: number;
-    total: number;
-  } | null>(null);
-  const [backendSummaryError, setBackendSummaryError] = useState<string | null>(null);
-
-  const refreshBackendSummary = useCallback(async () => {
-    try {
-      const response = await fetch('/api/customer/cart', {
-        method: 'GET',
-        cache: 'no-store',
-      });
-
-      if (!response.ok) {
-        setBackendSummaryError(`GET /api/customer/cart failed with ${response.status}`);
-        return;
-      }
-
-      const data = (await response.json()) as {
-        summary?: {
-          itemCount: number;
-          subtotal: number;
-          handlingFee: number;
-          total: number;
-        };
-      };
-
-      setBackendSummary(data.summary ?? null);
-      setBackendSummaryError(null);
-    } catch {
-      setBackendSummaryError('Failed to fetch backend cart summary');
-    }
-  }, []);
 
   useEffect(() => {
     try {
@@ -123,8 +86,8 @@ export default function PaymentPage() {
           setItems(safeCart);
         }
       }
-    } catch {
-      // Keep existing cart key untouched if parsing fails; user might recover on next valid write.
+    } catch (err) {
+      console.warn('[Payment] Failed to parse cart from local storage:', err);
     } finally {
       setCartHydrated(true);
     }
@@ -137,7 +100,8 @@ export default function PaymentPage() {
           setAddress(parsedAddress);
         }
       }
-    } catch {
+    } catch (err) {
+      console.warn('[Payment] Failed to parse saved checkout address, clearing local entry:', err);
       localStorage.removeItem(CHECKOUT_ADDRESS_STORAGE_KEY);
     }
   }, []);
@@ -159,18 +123,9 @@ export default function PaymentPage() {
     if (!cartHydrated) return;
     const raw = JSON.stringify(items);
     writeCartRaw(raw);
-    void syncCartRawToServer(raw).then(() => {
-      if (showDebug) {
-        void refreshBackendSummary();
-      }
-    });
+    void syncCartRawToServer(raw);
     window.dispatchEvent(new Event('sevam-cart-updated'));
-  }, [items, cartHydrated, showDebug, refreshBackendSummary]);
-
-  useEffect(() => {
-    if (!showDebug) return;
-    void refreshBackendSummary();
-  }, [showDebug, refreshBackendSummary]);
+  }, [items, cartHydrated]);
 
   const updateQuantity = (itemId: string, delta: number) => {
     setItems((prev) =>
@@ -223,7 +178,7 @@ export default function PaymentPage() {
         cache: 'no-store',
       });
 
-      const orderPayload = (await orderResponse.json().catch(() => ({}))) as {
+      let orderPayload: {
         error?: string;
         keyId?: string;
         order?: {
@@ -231,7 +186,13 @@ export default function PaymentPage() {
           amount: number;
           currency: string;
         };
-      };
+      } = {};
+
+      try {
+        orderPayload = (await orderResponse.json()) as typeof orderPayload;
+      } catch (err) {
+        console.error('[Payment] Failed to parse order response JSON:', err);
+      }
 
       if (!orderResponse.ok || !orderPayload.order?.id || !orderPayload.keyId) {
         setPaymentError(orderPayload.error ?? 'Unable to create payment order.');
@@ -271,9 +232,15 @@ export default function PaymentPage() {
               cache: 'no-store',
             });
 
-            const verifyPayload = (await verifyResponse.json().catch(() => ({}))) as {
+            let verifyPayload: {
               error?: string;
-            };
+            } = {};
+
+            try {
+              verifyPayload = (await verifyResponse.json()) as typeof verifyPayload;
+            } catch (err) {
+              console.error('[Payment] Failed to parse verify response JSON:', err);
+            }
 
             if (!verifyResponse.ok) {
               setPaymentError(verifyPayload.error ?? 'Payment verification failed. Please try again.');
@@ -345,18 +312,6 @@ export default function PaymentPage() {
           />
         )}
 
-        {showDebug && (
-          <div className="border-t border-[#d7dce3] bg-white/95 px-4 py-3 text-xs text-[#2f3446]">
-            <p className="font-semibold">Checkout Debug (cartDebug=1)</p>
-            <p>
-              Frontend: itemCount={items.reduce((sum, item) => sum + item.quantity, 0)} subtotal={subtotal.toFixed(2)}
-            </p>
-            <p>
-              Backend: itemCount={backendSummary?.itemCount ?? 0} subtotal={(backendSummary?.subtotal ?? 0).toFixed(2)} total={(backendSummary?.total ?? 0).toFixed(2)}
-            </p>
-            {backendSummaryError && <p className="text-red-600">{backendSummaryError}</p>}
-          </div>
-        )}
       </div>
     </div>
   );

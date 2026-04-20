@@ -153,7 +153,8 @@ export default function App() {
           setCatalog(cached);
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('[Dashboard] Corrupted catalog cache, clearing local entry:', err);
       localStorage.removeItem(CATALOG_CACHE_KEY);
     }
 
@@ -176,7 +177,8 @@ export default function App() {
           localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(data));
           return data;
         });
-      } catch {
+      } catch (err) {
+        console.error('[Dashboard] Failed to load catalog:', err);
         // Keep cached data on error
         if (isMounted && !catalog) {
           setCatalog(null);

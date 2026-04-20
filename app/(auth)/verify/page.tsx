@@ -9,17 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { verifyOtp } from "@/server/actions/auth/verify-otp";
 import { sendOtp } from "@/server/actions/auth/send-otp";
 import { useAuthStore } from "@/lib/hooks/useAuthStore";
+import { maskPhoneForVerification } from "@/lib/utils/phone";
 import type { UserType } from "@/types/auth";
 
 const RESEND_COOLDOWN = 30; // seconds
-
-/** Mask a +91XXXXXXXXXX phone as "+91 XXXXX 12345" */
-function maskPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 10) return phone;
-  const last10 = digits.slice(-10);
-  return `+91 XXXXX ${last10.slice(5)}`;
-}
 
 /** Where to send each user type after login */
 const HOME_FOR: Record<UserType, string> = {
@@ -130,7 +123,7 @@ export default function VerifyPage() {
         <CardDescription>
           Enter the 6-digit OTP sent to{" "}
           <span className="font-medium text-[--color-foreground]">
-            {maskPhone(pendingPhone)}
+            {maskPhoneForVerification(pendingPhone)}
           </span>
         </CardDescription>
       </CardHeader>

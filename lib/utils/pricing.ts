@@ -1,5 +1,5 @@
 import type { JobType } from "@/lib/generated/prisma/client";
-import type { PriceEstimate } from "@/types/job";
+import type { PriceEstimate, PriceEstimateV2 } from "@/types/estimate";
 
 // ─── Base prices (INR) ────────────────────────────────────────────────────────
 
@@ -82,14 +82,6 @@ function getWorkerRatingMultiplier(rating: number): number {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export interface PriceEstimateV2 extends PriceEstimate {
-  surgeMultiplier: number;
-  surgeLabel: string | null;
-  workerRatingMultiplier: number;
-  /** Human-readable breakdown string for logging / UI tooltips. */
-  breakdown: string;
-}
-
 /**
  * V2 price estimator with distance surcharge, time-of-day surge,
  * weekend premium, and worker-rating adjustment.
@@ -136,9 +128,4 @@ export function estimatePrice(
 /** Format a price as "₹1,200". */
 export function formatPrice(amount: number): string {
   return `₹${amount.toLocaleString("en-IN")}`;
-}
-
-/** Return the current surge label string for UI badge display (null = normal rate). */
-export function getCurrentSurgeLabel(): string | null {
-  return getSurgeMultiplier().label;
 }

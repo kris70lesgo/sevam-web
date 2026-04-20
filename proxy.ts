@@ -43,7 +43,13 @@ async function parseAccessToken(token: string): Promise<SessionPayload | null> {
     ) {
       return null;
     }
-    return payload as unknown as SessionPayload;
+    return {
+      userId: payload.userId,
+      phone: payload.phone,
+      userType: payload.userType as UserType,
+      iat: typeof payload.iat === "number" ? payload.iat : undefined,
+      exp: typeof payload.exp === "number" ? payload.exp : undefined,
+    };
   } catch {
     return null;
   }

@@ -6,13 +6,14 @@ import { getSession } from "@/lib/auth/session";
 import { createClient } from "@/lib/db/supabase-server";
 import { checkRateLimit, workerLocationLimiter } from "@/lib/utils/rate-limit";
 import { captureError } from "@/lib/utils/monitoring";
+import { LatitudeSchema, LongitudeSchema } from "@/lib/validation/schemas";
 import type { ActionResult } from "@/types/auth";
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 const LocationSchema = z.object({
-  lat: z.number().finite().min(-90).max(90),
-  lng: z.number().finite().min(-180).max(180),
+  lat: LatitudeSchema,
+  lng: LongitudeSchema,
 });
 
 // ─── updateWorkerLocation ─────────────────────────────────────────────────────

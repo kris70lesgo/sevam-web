@@ -9,20 +9,17 @@ import { sendPushToMany } from "@/lib/utils/notifications";
 import { checkRateLimit, customerJobLimiter } from "@/lib/utils/rate-limit";
 import { sanitizeDescription, sanitizeAddress } from "@/lib/utils/sanitize";
 import { captureError } from "@/lib/utils/monitoring";
+import { JobTypeSchema, LatitudeSchema, LongitudeSchema } from "@/lib/validation/schemas";
 import type { ActionResult } from "@/types/auth";
-import type { JobType } from "@/lib/generated/prisma/client";
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
 const JobSchema = z.object({
-  type: z.enum([
-    "PLUMBING", "ELECTRICAL", "PAINTING", "CARPENTRY",
-    "CLEANING", "AC_REPAIR", "APPLIANCE_REPAIR", "OTHER",
-  ]),
+  type: JobTypeSchema,
   description: z.string().min(10, "Description must be at least 10 characters").max(500),
   address:     z.string().min(5, "Address is required"),
-  lat:         z.number().finite().min(-90).max(90),
-  lng:         z.number().finite().min(-180).max(180),
+  lat:         LatitudeSchema,
+  lng:         LongitudeSchema,
 });
 
 export type CreateJobInput = z.infer<typeof JobSchema>;
@@ -68,14 +65,14 @@ export async function createJob(
   }
 
   // Estimate price (no worker location yet — use base price)
-  const { total: estimatedPrice } = estimatePrice(type as JobType);
+  const { total: estimatedPrice } = estimatePrice(type);
 
   try {
     // Create job
     const job = await prisma.job.create({
       data: {
         customerId:     session.userId,
-        type:           type as JobType,
+        type,
         description,
         address,
         lat,
@@ -87,7 +84,7 @@ export async function createJob(
 
     // Notify nearby workers — non-critical, errors are captured but don't fail the action
     try {
-      const nearbyWorkers = await findNearbyWorkers({ lat, lng, jobType: type as JobType });
+      const nearbyWorkers = await findNearbyWorkers({ lat, lng, jobType: type });
       if (nearbyWorkers.length > 0) {
         const workerUserIds = nearbyWorkers.map((w) => w.userId);
 

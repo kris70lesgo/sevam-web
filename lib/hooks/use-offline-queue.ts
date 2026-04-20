@@ -76,6 +76,7 @@ export function useOfflineQueue<TInput>({
       const raw = localStorage.getItem(storageKey);
       return raw ? (JSON.parse(raw) as Array<QueuedAction<TInput> & { retries?: number }>) : [];
     } catch {
+      // Invalid or corrupted queue data should not block app usage.
       return [];
     }
   }, [storageKey]);
@@ -134,6 +135,7 @@ export function useOfflineQueue<TInput>({
           }
           // ok === true → item successfully processed, don't keep it
         } catch {
+          // Transient execute failures are retried with incremented retry count.
           remaining.push({ ...item, retries: retries + 1 });
         }
       }
@@ -141,6 +143,7 @@ export function useOfflineQueue<TInput>({
       writeQueue(remaining);
       if (remaining.length === 0) flushRef.current?.();
     } finally {
+      // Always unlock the flush guard so future online events can retry.
       flushingRef.current = false;
     }
   }, [readQueue, writeQueue, maxRetries]);

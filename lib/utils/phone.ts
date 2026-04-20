@@ -70,25 +70,6 @@ export function tryNormalisePhone(raw: string): string | null {
 }
 
 /**
- * Given an array of raw phone strings, return a deduplicated array of canonical
- * +91XXXXXXXXXX strings. Invalid entries are silently skipped.
- *
- * Useful for deduplicating FCM token lookups and bulk SMS lists.
- */
-export function deduplicatePhones(raws: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const raw of raws) {
-    const canonical = tryNormalisePhone(raw);
-    if (canonical && !seen.has(canonical)) {
-      seen.add(canonical);
-      result.push(canonical);
-    }
-  }
-  return result;
-}
-
-/**
  * Mask a phone number for display/logging: +91XXXXXX4321 → +91XXXXXX4321 → "+91 XXXXX X4321".
  * Returns the last 4 digits with the rest masked.
  */
@@ -98,4 +79,15 @@ export function maskPhone(phone: string): string {
   // canonical is always +91 + 10 digits = 13 chars
   const last4 = canonical.slice(-4);
   return `+91 XXXXXX${last4}`;
+}
+
+/**
+ * Mask a phone number for OTP verification UI: +91 XXXXX 43210.
+ * Keeps the last 5 digits so users can confirm the destination number.
+ */
+export function maskPhoneForVerification(phone: string): string {
+  const canonical = tryNormalisePhone(phone);
+  if (!canonical) return phone;
+  const last10 = canonical.slice(-10);
+  return `+91 XXXXX ${last10.slice(5)}`;
 }

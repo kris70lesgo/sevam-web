@@ -4,9 +4,15 @@ import { AddressLabel } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { requireCustomerUserFromRequest } from "@/lib/server/auth/customer-api-auth";
 import { badRequest, getRequestId, internalError, notFound, ok } from "@/lib/server/api/http";
+import {
+  AddressLabelSchema,
+  LatitudeSchema,
+  LongitudeSchema,
+  PincodeSchema,
+} from "@/lib/validation/schemas";
 
 type UpdateAddressBody = {
-  label?: "HOME" | "OFFICE" | "OTHER";
+  label?: AddressLabel;
   line1?: string;
   line2?: string;
   landmark?: string;
@@ -19,27 +25,19 @@ type UpdateAddressBody = {
   isActive?: boolean;
 };
 
-const PincodeSchema = z.string().trim().regex(/^\d{6}$/, "pincode must be a 6 digit code");
-
 const UpdateAddressSchema = z.object({
-  label: z.enum(["HOME", "OFFICE", "OTHER"]).optional(),
+  label: AddressLabelSchema.optional(),
   line1: z.string().trim().min(3).max(160).optional(),
   line2: z.string().trim().max(160).optional(),
   landmark: z.string().trim().max(160).optional(),
   city: z.string().trim().min(2).max(80).optional(),
   state: z.string().trim().min(2).max(80).optional(),
   pincode: PincodeSchema.optional(),
-  lat: z.number().finite().min(-90).max(90).nullable().optional(),
-  lng: z.number().finite().min(-180).max(180).nullable().optional(),
+  lat: LatitudeSchema.nullable().optional(),
+  lng: LongitudeSchema.nullable().optional(),
   isDefault: z.boolean().optional(),
   isActive: z.boolean().optional(),
 });
-
-function normalizeLabel(label?: string): AddressLabel {
-  if (label === "OFFICE") return AddressLabel.OFFICE;
-  if (label === "OTHER") return AddressLabel.OTHER;
-  return AddressLabel.HOME;
-}
 
 type RouteParams = {
   params: Promise<{ id: string }>;
@@ -93,7 +91,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       isActive?: boolean;
     } = {};
 
-    if (body.label) updates.label = normalizeLabel(body.label);
+    if (body.label) updates.label = body.label;
     if (typeof body.line1 === "string") updates.line1 = body.line1.trim();
     if (typeof body.line2 === "string") updates.line2 = body.line2.trim() || null;
     if (typeof body.landmark === "string") updates.landmark = body.landmark.trim() || null;

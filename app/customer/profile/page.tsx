@@ -123,6 +123,14 @@ export default function ProfilePage() {
   const [addressesMsg, setAddressesMsg] = useState('');
   const [addressesErr, setAddressesErr] = useState('');
   const [isAddAddressModalOpen, setIsAddAddressModalOpen] = useState(false);
+  const [isEditAddressModalOpen, setIsEditAddressModalOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<AddressCard | null>(null);
+  const [editLabel, setEditLabel] = useState<AddressLabel>('HOME');
+  const [editLine1, setEditLine1] = useState('');
+  const [editLine2, setEditLine2] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editState, setEditState] = useState('');
+  const [editPincode, setEditPincode] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<LocationResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -220,7 +228,8 @@ export default function ProfilePage() {
           phone: cleanPhone(parsed.phone),
         });
       }
-    } catch {
+    } catch (err) {
+      console.error('[Profile] Failed to parse cached profile, clearing local entry:', err);
       localStorage.removeItem(PROFILE_STORAGE_KEY);
     }
   }, []);
@@ -234,7 +243,8 @@ export default function ProfilePage() {
       if (parsed?.name && Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng)) {
         setSelectedLocation(parsed);
       }
-    } catch {
+    } catch (err) {
+      console.error('[Profile] Failed to parse cached location, clearing local entry:', err);
       localStorage.removeItem(LOCATION_STORAGE_KEY);
     }
   }, []);
@@ -508,6 +518,63 @@ export default function ProfilePage() {
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
+  };
+
+  const handleEditAddress = (addr: AddressCard) => {
+    setEditingAddress(addr);
+    setEditLabel(addr.label);
+    const parts = addr.address.split(',');
+    setEditLine1(parts[0]?.trim() || '');
+    setEditLine2(parts.slice(1).join(',').trim() || '');
+    const cityParts = addr.city.split('-');
+    setEditCity(cityParts[0]?.trim() || '');
+    setEditPincode(cityParts[1]?.trim() || '');
+    setEditState(''); // State not shown in card, will need to be fetched
+    setIsEditAddressModalOpen(true);
+  };
+
+  const handleUpdateAddress = async () => {
+    try {
+      setAddressesErr('');
+      setAddressesMsg('');
+
+      if (!editingAddress) return;
+
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setAddressesErr('Please login again to update addresses.');
+        return;
+      }
+
+      const response = await fetch('/api/customer/addresses', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          id: editingAddress.id,
+          label: editLabel,
+          line1: editLine1,
+          line2: editLine2 || undefined,
+          city: editCity,
+          state: editState,
+          pincode: editPincode,
+        }),
+      });
+
+      if (!response.ok) {
+        setAddressesErr('Unable to update address.');
+        return;
+      }
+
+      await refreshAddresses(accessToken);
+      setAddressesMsg('Address updated successfully.');
+      setIsEditAddressModalOpen(false);
+      setEditingAddress(null);
+    } catch {
+      setAddressesErr('Unable to update address.');
+    }
   };
 
   const handleSaveLocationAsAddress = async () => {
@@ -845,14 +912,22 @@ export default function ProfilePage() {
                         </div>
                         <div style={{ fontSize: 12, color: '#222', marginBottom: 1 }}>{addr.address}</div>
                         <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 6 }}>{addr.city}</div>
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 'auto' }}>
-                          <button style={{ color: '#FC8019', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => {/* TODO: Edit handler */}}>
-                            EDIT
-                          </button>
-                          <button style={{ color: '#EF4444', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => handleDeleteAddress(addr.id)}>
-                            DELETE
-                          </button>
-                        </div>
+<div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 'auto' }}>
+                  {!addr.isDefault && (
+                    <button style={{ color: '#16A34A', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => handleSetDefaultAddress(addr.id)}>
+                    SET AS DEFAULT
+                    </button>
+                  )}
+                  {addr.isDefault && (
+                    <span style={{ color: '#9CA3AF', fontWeight: 600, fontSize: 11 }}>DEFAULT</span>
+                  )}
+                  <button style={{ color: '#FC8019', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => handleEditAddress(addr)}>
+                  EDIT
+                  </button>
+                  <button style={{ color: '#EF4444', fontWeight: 700, fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => handleDeleteAddress(addr.id)}>
+                  DELETE
+                  </button>
+                </div>
                       </div>
                     );
                   })}
@@ -1114,11 +1189,129 @@ export default function ProfilePage() {
                 </button>
               </div>
             </div>
-          </div>
-        </>
-      )}
+</div>
+      </>
+    )}
 
-      {isEditDrawerOpen && (
+    {isEditAddressModalOpen && (
+      <>
+        <div
+          onClick={() => setIsEditAddressModalOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.42)', zIndex: 70 }}
+        />
+        <div
+          style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(520px, calc(100vw - 32px))', background: '#fff', borderRadius: 14, boxShadow: '0 20px 48px rgba(15,23,42,0.22)', zIndex: 75, overflow: 'hidden' }}
+        >
+          <div style={{ padding: '16px 18px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: 0 }}>Edit Address</p>
+              <p style={{ fontSize: 12, color: '#6B7280', margin: '4px 0 0 0' }}>Update your address details</p>
+            </div>
+            <button
+              onClick={() => setIsEditAddressModalOpen(false)}
+              style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              aria-label="Close edit address modal"
+            >
+              <X style={{ width: 14, height: 14, color: '#334155' }} />
+            </button>
+          </div>
+
+          <div style={{ padding: '16px 18px 18px' }}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ ...S.label, marginBottom: 8 }}>Address Label</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {(['HOME', 'OFFICE', 'OTHER'] as AddressLabel[]).map((label) => (
+                  <button
+                    key={label}
+                    onClick={() => setEditLabel(label)}
+                    style={{ flex: 1, padding: '10px', borderRadius: 8, border: editLabel === label ? '2px solid #FC8019' : '1px solid #E5E7EB', background: editLabel === label ? '#FFF7ED' : '#fff', color: editLabel === label ? '#FC8019' : '#334155', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {label === 'HOME' ? 'Home' : label === 'OFFICE' ? 'Office' : 'Other'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ ...S.label, marginBottom: 8 }}>Address Line 1</label>
+              <input
+                type="text"
+                value={editLine1}
+                onChange={(e) => setEditLine1(e.target.value)}
+                placeholder="House/Flat No., Building, Street"
+                style={{ ...S.input, borderRadius: 8 }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ ...S.label, marginBottom: 8 }}>Address Line 2 (Optional)</label>
+              <input
+                type="text"
+                value={editLine2}
+                onChange={(e) => setEditLine2(e.target.value)}
+                placeholder="Area, Locality, Landmark"
+                style={{ ...S.input, borderRadius: 8 }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+              <div>
+                <label style={{ ...S.label, marginBottom: 8 }}>City</label>
+                <input
+                  type="text"
+                  value={editCity}
+                  onChange={(e) => setEditCity(e.target.value)}
+                  placeholder="City"
+                  style={{ ...S.input, borderRadius: 8 }}
+                />
+              </div>
+              <div>
+                <label style={{ ...S.label, marginBottom: 8 }}>State</label>
+                <input
+                  type="text"
+                  value={editState}
+                  onChange={(e) => setEditState(e.target.value)}
+                  placeholder="State"
+                  style={{ ...S.input, borderRadius: 8 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ ...S.label, marginBottom: 8 }}>Pincode</label>
+              <input
+                type="text"
+                value={editPincode}
+                onChange={(e) => setEditPincode(e.target.value)}
+                placeholder="6-digit pincode"
+                maxLength={6}
+                style={{ ...S.input, borderRadius: 8 }}
+              />
+            </div>
+
+            {addressesErr && <p style={{ fontSize: 12, color: '#EF4444', marginBottom: 8 }}>{addressesErr}</p>}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setIsEditAddressModalOpen(false)}
+                style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #CBD5E1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateAddress}
+                disabled={!editLine1 || !editCity || !editState || !editPincode}
+                style={{ ...S.btnPrimary, borderRadius: 8, opacity: editLine1 && editCity && editState && editPincode ? 1 : 0.6 }}
+              >
+                Update Address
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+
+    {isEditDrawerOpen && (
         <>
           <div
             onClick={() => setIsEditDrawerOpen(false)}

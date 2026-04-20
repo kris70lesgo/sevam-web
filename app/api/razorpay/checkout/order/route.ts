@@ -3,13 +3,7 @@ import { z } from 'zod';
 import { checkRateLimit, customerCartLimiter } from '@/lib/utils/rate-limit';
 import { getRazorpay } from '@/lib/utils/razorpay';
 import { badRequest, getRequestId, internalError, ok, tooManyRequests } from '@/lib/server/api/http';
-
-type CartItem = {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-};
+import type { CartItem } from '@/types/cart';
 
 const CART_COOKIE_KEY = 'sevam_service_cart_cookie';
 
@@ -69,7 +63,7 @@ export async function POST(req: NextRequest) {
       return tooManyRequests(requestId, rl.retryAfter ?? 60);
     }
 
-    const body = (await req.json().catch(() => ({}))) as unknown;
+    const body = await req.json().catch(() => ({}));
     const parsedBody = CreateOrderSchema.safeParse(body);
     if (!parsedBody.success) {
       return badRequest(parsedBody.error.issues[0]?.message ?? 'Invalid payload', requestId);

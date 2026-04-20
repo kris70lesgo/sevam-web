@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { supabaseAdmin } from '@/lib/db/supabase-server';
+import { normalizeAuthPhone } from '@/lib/auth/normalize-phone';
 import { forbidden, unauthorized } from '@/lib/server/api/http';
 
 type CustomerUser = {
@@ -22,13 +23,6 @@ type RequireCustomerUserResult =
       ok: false;
       response: NextResponse;
     };
-
-function normalizePhone(input?: string | null, fallbackUserId?: string) {
-  const raw = (input ?? '').trim();
-  if (raw) return raw;
-  if (fallbackUserId) return `oauth_${fallbackUserId}`;
-  return '';
-}
 
 function parseBearerToken(req: NextRequest) {
   const authHeader = req.headers.get('authorization') ?? '';
@@ -52,7 +46,7 @@ export async function requireCustomerUserFromRequest(
   }
 
   const supabaseUser = data.user;
-  const phone = normalizePhone(supabaseUser.phone, supabaseUser.id);
+  const phone = normalizeAuthPhone(supabaseUser.phone, supabaseUser.id);
   if (!phone) {
     return { ok: false, response: unauthorized(rid) };
   }

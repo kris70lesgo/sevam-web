@@ -1,13 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { checkRateLimit, customerCartLimiter } from '@/lib/utils/rate-limit';
-
-type CartItem = {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-};
+import type { CartItem } from '@/types/cart';
 
 const CART_COOKIE_KEY = 'sevam_service_cart_cookie';
 const CART_MAX_AGE = 60 * 60 * 24 * 30;
@@ -78,7 +72,8 @@ export async function GET(req: NextRequest) {
       items,
       summary: summarize(items),
     });
-  } catch {
+  } catch (err) {
+    console.error('[GET /api/customer/cart] Failed to load cart from cookie:', err);
     return NextResponse.json({ items: [], summary: { itemCount: 0, subtotal: 0 } });
   }
 }
@@ -121,7 +116,8 @@ export async function POST(req: NextRequest) {
     });
 
     return response;
-  } catch {
+  } catch (err) {
+    console.error('[POST /api/customer/cart] Failed to validate or persist cart payload:', err);
     return NextResponse.json({ ok: false, error: 'Invalid cart payload' }, { status: 400 });
   }
 }

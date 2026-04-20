@@ -57,7 +57,7 @@ export async function verifyOtp(
     // Check expiration
     if (record.expiresAt < new Date()) {
       await prisma.otpVerification.delete({ where: { phone } }).catch((err: unknown) => {
-        console.error("[verifyOtp] Failed to delete expired OTP record:", err instanceof Error ? err.message : "unknown");
+        console.warn("[verifyOtp] Failed to delete expired OTP record (non-critical):", err instanceof Error ? err.message : "unknown");
       });
       return {
         ok: false,
@@ -69,7 +69,7 @@ export async function verifyOtp(
     // Check lock
     if (record.attempts >= OTP_MAX_ATTEMPTS) {
       await prisma.otpVerification.delete({ where: { phone } }).catch((err: unknown) => {
-        console.error("[verifyOtp] Failed to delete locked OTP record:", err instanceof Error ? err.message : "unknown");
+        console.warn("[verifyOtp] Failed to delete locked OTP record (non-critical):", err instanceof Error ? err.message : "unknown");
       });
       return {
         ok: false,
@@ -93,7 +93,7 @@ export async function verifyOtp(
 
       if (remaining <= 0) {
         await prisma.otpVerification.delete({ where: { phone } }).catch((err: unknown) => {
-          console.error("[verifyOtp] Failed to delete OTP after max attempts:", err instanceof Error ? err.message : "unknown");
+          console.warn("[verifyOtp] Failed to delete OTP after max attempts (non-critical):", err instanceof Error ? err.message : "unknown");
         });
         return {
           ok: false,

@@ -3,23 +3,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import type { ActionResult } from "@/types/auth";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface AnalyticsSummary {
-  totalJobs:          number;
-  jobsByStatus:       Record<string, number>;
-  jobsByType:         Record<string, number>;
-  totalRevenue:       number;
-  totalCustomers:     number;
-  totalWorkers:       number;
-  approvedWorkers:    number;
-  pendingWorkers:     number;
-  activeWorkers:      number;
-  activeDisputes:     number;
-  dailySeries:        { date: string; jobs: number; revenue: number }[];
-  allJobsDailySeries: { date: string; count: number }[];
-}
+import type { AnalyticsSummary } from "@/types/admin";
+export type { AnalyticsSummary } from "@/types/admin";
 
 // ─── B15: Admin analytics ─────────────────────────────────────────────────────
 

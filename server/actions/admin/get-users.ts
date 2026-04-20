@@ -3,29 +3,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import type { ActionResult } from "@/types/auth";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface WorkerRow {
-  workerId:     string;
-  userId:       string;
-  name:         string | null;
-  phone:        string;
-  skills:       string[];
-  isApproved:   boolean;
-  isOnline:     boolean;
-  totalJobs:    number;
-  rating:       number;
-  joinedAt:     Date;
-}
-
-export interface CustomerRow {
-  id:           string;
-  name:         string | null;
-  phone:        string;
-  totalJobs:    number;
-  joinedAt:     Date;
-}
+import type { CustomerRow, WorkerRow } from "@/types/admin";
+export type { CustomerRow, WorkerRow } from "@/types/admin";
 
 // ─── F19a: List workers (pending or all) ─────────────────────────────────────
 

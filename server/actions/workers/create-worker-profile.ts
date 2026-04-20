@@ -3,20 +3,15 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
+import { JobTypeSchema } from "@/lib/validation/schemas";
 import type { ActionResult } from "@/types/auth";
-import type { JobType } from "@/lib/generated/prisma/client";
 
 // ─── Validation schema ────────────────────────────────────────────────────────
-
-const VALID_SKILLS: JobType[] = [
-  "PLUMBING", "ELECTRICAL", "PAINTING", "CARPENTRY",
-  "CLEANING", "AC_REPAIR", "APPLIANCE_REPAIR", "OTHER",
-];
 
 const WorkerProfileSchema = z.object({
   name:     z.string().min(2).max(80),
   bio:      z.string().max(300).optional(),
-  skills:   z.array(z.enum(VALID_SKILLS as [JobType, ...JobType[]])).min(1, "Select at least one skill"),
+  skills:   z.array(JobTypeSchema).min(1, "Select at least one skill"),
   photoUrl: z.string().url("Invalid photo URL").optional(),
 });
 

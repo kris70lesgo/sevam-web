@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { isSyntheticPhone, normalizeAuthPhone } from "@/lib/auth/normalize-phone";
 import { supabaseAdmin } from "@/lib/db/supabase-server";
 
 type SyncBody = {
@@ -11,17 +12,6 @@ type SyncBody = {
 
 let dbSyncPausedUntil = 0;
 const DB_SYNC_PAUSE_MS = 5 * 60 * 1000;
-
-function normalizePhone(input?: string | null, fallbackUserId?: string) {
-  const raw = (input ?? "").trim();
-  if (raw) return raw;
-  if (fallbackUserId) return `oauth_${fallbackUserId}`;
-  return "";
-}
-
-function isSyntheticPhone(phone: string) {
-  return phone.startsWith("oauth_");
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const email = body.email?.trim() || supabaseUser.email || "";
     const phoneFromUser = (supabaseUser.phone as string | undefined) ?? "";
-    const phone = normalizePhone(phoneFromUser, supabaseUser.id);
+    const phone = normalizeAuthPhone(phoneFromUser, supabaseUser.id);
 
     if (!phone) {
       return NextResponse.json({ error: "Phone resolution failed" }, { status: 400 });

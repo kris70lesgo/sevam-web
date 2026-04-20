@@ -22,7 +22,6 @@ export default function TrackJobPage() {
   const [loading,   setLoading]   = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Fetch job
   const load = useCallback(async () => {
     setLoadError(null);
     try {

@@ -35,7 +35,8 @@ export default function Footer() {
         if (names.length > 0) {
           setCatalogCategories(names);
         }
-      } catch {
+      } catch (err) {
+        console.warn('[Footer] Failed to load catalog categories, using fallback list:', err);
         // Keep fallback categories in case catalog is temporarily unavailable.
       }
     };

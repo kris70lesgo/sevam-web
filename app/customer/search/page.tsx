@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Clock } from "lucide-react";
 import Navbar from "@/components/dashboardnavbar";
 import type { CatalogService, ServiceCatalogApiResponse } from "@/types/service-catalog";
+import type { CartItem } from "@/types/cart";
 import { clearCartRaw, readCartRaw, syncCartRawToServer, writeCartRaw } from "@/lib/utils/cart-storage";
 
 const CATALOG_CACHE_KEY = "sevam_catalog_cache_v1";
@@ -18,13 +19,6 @@ type SearchService = {
   price: number;
   currentPrice: string;
   deliveryTime: string;
-};
-
-type CartItem = {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
 };
 
 export default function CustomerSearchPage() {
@@ -218,7 +212,7 @@ export default function CustomerSearchPage() {
         </div>
 
         <h2 className="mt-2 text-[30px] font-bold text-[#1f1f1f]">
-          Showing results for "{rawQuery || "all"}"
+          Showing results for &quot;{rawQuery || "all"}&quot;
         </h2>
 
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-[22px]">

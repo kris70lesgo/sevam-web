@@ -92,13 +92,3 @@ export function captureCritical(error: unknown, ctx: ErrorContext): void {
     Sentry.captureException(error);
   });
 }
-
-/**
- * Log a breadcrumb for non-error events (useful for tracing payment flows).
- */
-export function addBreadcrumb(
-  message: string,
-  data?: Record<string, unknown>
-): void {
-  Sentry.addBreadcrumb({ message, data, level: "info" });
-}

@@ -1,11 +1,11 @@
 import type { JobType, JobStatus, CancelledBy } from "@/lib/generated/prisma/client";
-import type { PriceEstimateV2 } from "@/lib/utils/pricing";
+import type { PriceEstimate, PriceEstimateV2 } from "@/types/estimate";
 
 // Re-export for convenience so app code doesn't import prisma directly
 export type { JobType, JobStatus, CancelledBy };
 
-// Re-export V2 pricing type (extends PriceEstimate with surge + rating fields)
-export type { PriceEstimateV2 };
+// Re-export pricing estimate types
+export type { PriceEstimate, PriceEstimateV2 };
 
 export interface LatLng {
   lat: number;
@@ -17,13 +17,6 @@ export interface JobLocation extends LatLng {
 }
 
 // ─── Pricing ──────────────────────────────────────────────────────────────────
-
-export interface PriceEstimate {
-  base: number;
-  distanceSurcharge: number;
-  total: number;
-  currency: "INR";
-}
 
 export interface JobSummary {
   id: string;

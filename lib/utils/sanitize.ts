@@ -50,34 +50,3 @@ export function sanitizeDescription(raw: string): string {
 export function sanitizeAddress(raw: string): string {
   return sanitizeText(raw);
 }
-
-/**
- * Sanitize a user display name.
- */
-export function sanitizeName(raw: string): string {
-  return sanitizeText(raw);
-}
-
-/**
- * Sanitize a worker bio.
- */
-export function sanitizeBio(raw: string): string {
-  return sanitizeText(raw);
-}
-
-/**
- * Batch-sanitize an object's string fields in one pass.
- * Uses Object.keys of the input to preserve the exact shape.
- *
- * @example
- * const clean = sanitizeFields({ description, address }, sanitizeDescription);
- */
-export function sanitizeFields<T extends Record<string, string>>(
-  fields: T,
-  sanitizer: (v: string) => string = sanitizeText
-): T {
-  return (Object.keys(fields) as Array<keyof T>).reduce<T>((acc, key) => {
-    acc[key] = sanitizer(fields[key] as string) as T[keyof T];
-    return acc;
-  }, {} as T);
-}

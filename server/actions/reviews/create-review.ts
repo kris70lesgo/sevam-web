@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { captureError } from "@/lib/utils/monitoring";
 import type { ActionResult } from "@/types/auth";
+import type { CreateReviewInput, WorkerReview } from "@/types/review";
+export type { CreateReviewInput, WorkerReview } from "@/types/review";
 import { Prisma } from "@/lib/generated/prisma/client";
 
 // ─── Validation schemas ──────────────────────────────────────────────────────
@@ -19,15 +21,6 @@ const GetWorkerReviewsSchema = z.object({
   workerId: z.string().min(1, "workerId is required"),
   limit:    z.number().int().min(1).max(50).default(10),
 });
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface CreateReviewInput {
-  jobId:   string;
-  /** Integer 1–5 star rating. */
-  rating:  number;
-  comment?: string;
-}
 
 // ─── Create review ────────────────────────────────────────────────────────────
 
@@ -123,16 +116,6 @@ export async function createReview(
     captureError(err, { action: "createReview", jobId });
     return { ok: false, error: "Failed to submit review. Please try again.", code: "SERVER_ERROR" };
   }
-}
-
-// ─── Get reviews for a worker ────────────────────────────────────────────────
-
-export interface WorkerReview {
-  id:          string;
-  rating:      number;
-  comment:     string | null;
-  customerName: string | null;
-  createdAt:   Date;
 }
 
 export async function getWorkerReviews(

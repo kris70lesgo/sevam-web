@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const requestId = getRequestId(req);
 
   try {
-    const body = (await req.json().catch(() => ({}))) as unknown;
+    const body = await req.json().catch(() => ({}));
     const parsedBody = VerifyPaymentSchema.safeParse(body);
     if (!parsedBody.success) {
       return badRequest(parsedBody.error.issues[0]?.message ?? 'Invalid payload', requestId);

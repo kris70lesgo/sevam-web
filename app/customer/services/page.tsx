@@ -8,23 +8,11 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/dashboardnavbar';
 import type { ServiceCatalogApiResponse } from '@/types/service-catalog';
+import type { SubService } from './types';
 import { clearCartRaw, readCartRaw, syncCartRawToServer, writeCartRaw } from '@/lib/utils/cart-storage';
 import ServicePopup from './components/ServicePopup';
 
 const CATALOG_CACHE_KEY = 'sevam_catalog_cache_v1';
-
-export interface SubService {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  duration: string;
-  rating: number;
-  reviews: number;
-  image: string;
-  process?: string[];
-  categoryName: string;
-}
 
 interface Category {
   id: string;
@@ -116,7 +104,7 @@ function ServiceCard({
 
           {/* ADD button or Stepper */}
           {isInCart ? (
-            // Blinkit-style stepper - Blue colors
+            /* Quantity stepper */
             <div className="flex items-center justify-between h-7 w-20 bg-blue-50 border border-blue-500 rounded-md overflow-hidden">
               <button
                 onClick={() => onUpdateQty(-1)}

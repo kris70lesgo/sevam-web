@@ -48,7 +48,6 @@ export function OtpInput({
     }
   }, [hasError, shakeTrigger]);
 
-  // Split controlled value into array of single chars
   const chars = Array.from({ length }, (_, i) => value[i] ?? "");
 
   function focusAt(index: number) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Star, Clock, Minus, Plus } from 'lucide-react';
-import type { SubService } from '../page';
+import type { SubService } from '../types';
 
 interface ServicePopupProps {
   service: SubService;

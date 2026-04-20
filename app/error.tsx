@@ -20,7 +20,6 @@ export default function GlobalError({
       // In dev it is useful to see the error name (not message) for quick triage.
       console.error("[GlobalError]", error.name, error.digest ?? "");
     }
-    // TODO: send error.digest to your telemetry/APM service here.
   }, [error]);
 
   return (

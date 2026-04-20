@@ -7,40 +7,19 @@ import Image from 'next/image';
 import { Search, ShoppingCart, ChevronDown, X, Minus, Plus } from 'lucide-react';
 import { supabase } from '@/lib/db/supabase';
 import { readCartRaw, syncCartRawToServer, writeCartRaw, CART_STORAGE_KEY } from '@/lib/utils/cart-storage';
-
-type LocationResult = {
-  name: string;
-  lat: number;
-  lng: number;
-};
+import type { CartItem, CheckoutAddress } from '@/types/cart';
+import type { LocationResult } from '@/types/location';
 
 const LOCATION_STORAGE_KEY = "sevam_selected_location";
 const PROFILE_STORAGE_KEY = "sevam_profile";
 const CHECKOUT_ADDRESS_STORAGE_KEY = 'sevam_checkout_address';
 const DEFAULT_NAV_LOCATION_LINE = "Shivam Market, 2nd Floor, 1 Ner...";
 
-type CartStorageItem = {
-  id: string;
-  name: string;
-  categoryName?: string;
-  duration?: string;
-  image?: string;
-  price: number;
-  quantity: number;
-};
-
 type NavbarUser = {
   name: string;
   email: string;
   phone: string;
   avatarUrl?: string;
-};
-
-type CheckoutAddress = {
-  id: string;
-  label: string;
-  line: string;
-  eta: string;
 };
 
 function cleanPhone(phone?: string) {
@@ -84,7 +63,7 @@ export default function Navbar() {
   const [authUser, setAuthUser] = useState<NavbarUser | null>(null);
   const [navSearch, setNavSearch] = useState('');
   const [cartSummary, setCartSummary] = useState({ itemCount: 0, total: 0 });
-  const [cartItems, setCartItems] = useState<CartStorageItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [isAddressSelectModalOpen, setIsAddressSelectModalOpen] = useState(false);
   const [checkoutAddresses, setCheckoutAddresses] = useState<CheckoutAddress[]>([]);
@@ -94,14 +73,14 @@ export default function Navbar() {
   const [checkoutAddressError, setCheckoutAddressError] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
-  const calculateCartSummary = (items: CartStorageItem[]) => {
+  const calculateCartSummary = (items: CartItem[]) => {
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const total = subtotal + (itemCount > 0 ? 50 : 0);
     return { itemCount, subtotal, total };
   };
 
-  const persistCartItems = (items: CartStorageItem[]) => {
+  const persistCartItems = (items: CartItem[]) => {
     const raw = JSON.stringify(items);
     writeCartRaw(raw);
     void syncCartRawToServer(raw);
@@ -125,7 +104,7 @@ export default function Navbar() {
         return;
       }
 
-      const parsed = JSON.parse(raw) as CartStorageItem[];
+      const parsed = JSON.parse(raw) as CartItem[];
       if (!Array.isArray(parsed)) {
         setCartItems([]);
         setCartSummary({ itemCount: 0, total: 0 });
@@ -458,12 +437,60 @@ export default function Navbar() {
     localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(place));
   };
 
-  const handleSelectLocation = (place: LocationResult) => {
+  const handleSelectLocation = async (place: LocationResult) => {
     persistSelectedLocation(place);
     setSearchQuery("");
     setSearchResults([]);
     setLocationError(null);
     setIsLocationModalOpen(false);
+
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return;
+
+    const parts = place.name
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const pincodeMatch = place.name.match(/\b\d{6}\b/);
+    const line1 = parts[0] ?? place.name;
+    const city =
+      (parts.length >= 3
+        ? parts[parts.length - 3]
+        : parts[1] ?? 'Unknown City'
+      )
+        .replace(/\b\d{6}\b/g, '')
+        .trim() || 'Unknown City';
+    const state =
+      (parts.length >= 2
+        ? parts[parts.length - 2]
+        : 'Unknown State'
+      )
+        .replace(/\b\d{6}\b/g, '')
+        .trim() || 'Unknown State';
+    const pincode = pincodeMatch?.[0] ?? '000000';
+
+    try {
+      await fetch('/api/customer/addresses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          label: 'OTHER',
+          line1,
+          city,
+          state,
+          pincode,
+          lat: place.lat,
+          lng: place.lng,
+          isDefault: false,
+        }),
+      });
+    } catch {
+      // Silently fail - location is still persisted locally
+    }
   };
 
   const handleDetectLocation = async () => {
