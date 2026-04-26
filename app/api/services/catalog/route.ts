@@ -32,7 +32,12 @@ export async function GET() {
         "Cache-Control": `public, max-age=${CACHE_DURATION}, s-maxage=${CACHE_DURATION}`,
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Unable to load service catalog" }, { status: 500 });
+  } catch (error) {
+    console.error("[catalog] Error:", error instanceof Error ? error.message : error);
+    console.error("[catalog] Stack:", error instanceof Error ? error.stack : "N/A");
+    return NextResponse.json(
+      { error: "Unable to load service catalog", details: error instanceof Error ? error.message : String(error) },
+      { status: 500 }
+    );
   }
 }
